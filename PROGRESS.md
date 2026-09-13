@@ -1,5 +1,9 @@
 # Phase 1 Progress
 
+## Progress — [Your Name]
+
+Phase 2 is complete for Items + Formula/BOM in scope. The work completed in the route shell, the items route, and server endpoints reuses the existing tables `items`, `item_particulars`, `formulas`, `formula_lines`, and `factory_items`; no new tables were invented and no schema migration was required. The only deviation observed during verification was that the formula line write depends on an existing `factory_items` parent row (`factory_item_id` foreign key), so the example `Solvent` factory row was seeded in the existing database to satisfy the line insert path. Phase 4 has not started yet.
+
 Phase 1 is complete for the requested handoff. The backend in `server/` provides an Express API backed by a SQLite database, and the frontend uses the existing design system and shared app shell. All sidebar placeholder routes relevant to Phase 1 now render safely inside the current app layout without crashing.
 
 ## Architecture Summary
