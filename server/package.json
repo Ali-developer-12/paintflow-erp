@@ -1,0 +1,18 @@
+{
+  "name": "paint-erp-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "init-db": "node src/init-db.js",
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "backup": "node src/backup.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.5.0",
+    "cors": "^2.8.5",
+    "express": "^4.19.2"
+  }
+}
