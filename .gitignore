@@ -7,7 +7,7 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
+node_modules/
 dist
 dist-ssr
 .output
@@ -15,6 +15,12 @@ dist-ssr
 .tanstack/**
 .nitro
 *.local
+
+# Local business database artifacts and generated DB files
+*.db
+*.db-journal
+erp.db
+!erp.sample.db
 
 # Wrangler / Cloudflare
 .wrangler/
