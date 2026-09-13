@@ -12,18 +12,18 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as AppIndexRouteImport } from './routes/app.index'
-import { Route as AppItemsRouteImport } from './routes/app.items'
-import { Route as AppSetupRouteImport } from './routes/app.setup'
-import { Route as AppPurchaseRouteImport } from './routes/app.purchase'
-import { Route as AppProductionRouteImport } from './routes/app.production'
-import { Route as AppSalesRouteImport } from './routes/app.sales'
+import { Route as AppAccountsRouteImport } from './routes/app.accounts'
+import { Route as AppBackupRouteImport } from './routes/app.backup'
 import { Route as AppCounterSaleRouteImport } from './routes/app.counter-sale'
 import { Route as AppIssueVoucherRouteImport } from './routes/app.issue-voucher'
-import { Route as AppReturnsRouteImport } from './routes/app.returns'
-import { Route as AppStockRouteImport } from './routes/app.stock'
-import { Route as AppAccountsRouteImport } from './routes/app.accounts'
+import { Route as AppItemsRouteImport } from './routes/app.items'
+import { Route as AppProductionRouteImport } from './routes/app.production'
+import { Route as AppPurchaseRouteImport } from './routes/app.purchase'
 import { Route as AppReportsRouteImport } from './routes/app.reports'
-import { Route as AppBackupRouteImport } from './routes/app.backup'
+import { Route as AppReturnsRouteImport } from './routes/app.returns'
+import { Route as AppSalesRouteImport } from './routes/app.sales'
+import { Route as AppSetupRouteImport } from './routes/app.setup'
+import { Route as AppStockRouteImport } from './routes/app.stock'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -40,29 +40,14 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRoute,
 } as any)
-const AppItemsRoute = AppItemsRouteImport.update({
-  id: '/items',
-  path: '/items',
+const AppAccountsRoute = AppAccountsRouteImport.update({
+  id: '/accounts',
+  path: '/accounts',
   getParentRoute: () => AppRoute,
 } as any)
-const AppSetupRoute = AppSetupRouteImport.update({
-  id: '/setup',
-  path: '/setup',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppPurchaseRoute = AppPurchaseRouteImport.update({
-  id: '/purchase',
-  path: '/purchase',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppProductionRoute = AppProductionRouteImport.update({
-  id: '/production',
-  path: '/production',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppSalesRoute = AppSalesRouteImport.update({
-  id: '/sales',
-  path: '/sales',
+const AppBackupRoute = AppBackupRouteImport.update({
+  id: '/backup',
+  path: '/backup',
   getParentRoute: () => AppRoute,
 } as any)
 const AppCounterSaleRoute = AppCounterSaleRouteImport.update({
@@ -75,19 +60,19 @@ const AppIssueVoucherRoute = AppIssueVoucherRouteImport.update({
   path: '/issue-voucher',
   getParentRoute: () => AppRoute,
 } as any)
-const AppReturnsRoute = AppReturnsRouteImport.update({
-  id: '/returns',
-  path: '/returns',
+const AppItemsRoute = AppItemsRouteImport.update({
+  id: '/items',
+  path: '/items',
   getParentRoute: () => AppRoute,
 } as any)
-const AppStockRoute = AppStockRouteImport.update({
-  id: '/stock',
-  path: '/stock',
+const AppProductionRoute = AppProductionRouteImport.update({
+  id: '/production',
+  path: '/production',
   getParentRoute: () => AppRoute,
 } as any)
-const AppAccountsRoute = AppAccountsRouteImport.update({
-  id: '/accounts',
-  path: '/accounts',
+const AppPurchaseRoute = AppPurchaseRouteImport.update({
+  id: '/purchase',
+  path: '/purchase',
   getParentRoute: () => AppRoute,
 } as any)
 const AppReportsRoute = AppReportsRouteImport.update({
@@ -95,69 +80,129 @@ const AppReportsRoute = AppReportsRouteImport.update({
   path: '/reports',
   getParentRoute: () => AppRoute,
 } as any)
-const AppBackupRoute = AppBackupRouteImport.update({
-  id: '/backup',
-  path: '/backup',
+const AppReturnsRoute = AppReturnsRouteImport.update({
+  id: '/returns',
+  path: '/returns',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSalesRoute = AppSalesRouteImport.update({
+  id: '/sales',
+  path: '/sales',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSetupRoute = AppSetupRouteImport.update({
+  id: '/setup',
+  path: '/setup',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppStockRoute = AppStockRouteImport.update({
+  id: '/stock',
+  path: '/stock',
   getParentRoute: () => AppRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
-  '/app/': typeof AppIndexRoute
-  '/app/items': typeof AppItemsRoute
-  '/app/setup': typeof AppSetupRoute
-  '/app/purchase': typeof AppPurchaseRoute
-  '/app/production': typeof AppProductionRoute
-  '/app/sales': typeof AppSalesRoute
+  '/app/accounts': typeof AppAccountsRoute
+  '/app/backup': typeof AppBackupRoute
   '/app/counter-sale': typeof AppCounterSaleRoute
   '/app/issue-voucher': typeof AppIssueVoucherRoute
-  '/app/returns': typeof AppReturnsRoute
-  '/app/stock': typeof AppStockRoute
-  '/app/accounts': typeof AppAccountsRoute
+  '/app/items': typeof AppItemsRoute
+  '/app/production': typeof AppProductionRoute
+  '/app/purchase': typeof AppPurchaseRoute
   '/app/reports': typeof AppReportsRoute
-  '/app/backup': typeof AppBackupRoute
+  '/app/returns': typeof AppReturnsRoute
+  '/app/sales': typeof AppSalesRoute
+  '/app/setup': typeof AppSetupRoute
+  '/app/stock': typeof AppStockRoute
+  '/app/': typeof AppIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/app': typeof AppIndexRoute
-  '/app/items': typeof AppItemsRoute
-  '/app/setup': typeof AppSetupRoute
-  '/app/purchase': typeof AppPurchaseRoute
-  '/app/production': typeof AppProductionRoute
-  '/app/sales': typeof AppSalesRoute
+  '/app/accounts': typeof AppAccountsRoute
+  '/app/backup': typeof AppBackupRoute
   '/app/counter-sale': typeof AppCounterSaleRoute
   '/app/issue-voucher': typeof AppIssueVoucherRoute
-  '/app/returns': typeof AppReturnsRoute
-  '/app/stock': typeof AppStockRoute
-  '/app/accounts': typeof AppAccountsRoute
+  '/app/items': typeof AppItemsRoute
+  '/app/production': typeof AppProductionRoute
+  '/app/purchase': typeof AppPurchaseRoute
   '/app/reports': typeof AppReportsRoute
-  '/app/backup': typeof AppBackupRoute
+  '/app/returns': typeof AppReturnsRoute
+  '/app/sales': typeof AppSalesRoute
+  '/app/setup': typeof AppSetupRoute
+  '/app/stock': typeof AppStockRoute
+  '/app': typeof AppIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
-  '/app/': typeof AppIndexRoute
-  '/app/items': typeof AppItemsRoute
-  '/app/setup': typeof AppSetupRoute
-  '/app/purchase': typeof AppPurchaseRoute
-  '/app/production': typeof AppProductionRoute
-  '/app/sales': typeof AppSalesRoute
+  '/app/accounts': typeof AppAccountsRoute
+  '/app/backup': typeof AppBackupRoute
   '/app/counter-sale': typeof AppCounterSaleRoute
   '/app/issue-voucher': typeof AppIssueVoucherRoute
-  '/app/returns': typeof AppReturnsRoute
-  '/app/stock': typeof AppStockRoute
-  '/app/accounts': typeof AppAccountsRoute
+  '/app/items': typeof AppItemsRoute
+  '/app/production': typeof AppProductionRoute
+  '/app/purchase': typeof AppPurchaseRoute
   '/app/reports': typeof AppReportsRoute
-  '/app/backup': typeof AppBackupRoute
+  '/app/returns': typeof AppReturnsRoute
+  '/app/sales': typeof AppSalesRoute
+  '/app/setup': typeof AppSetupRoute
+  '/app/stock': typeof AppStockRoute
+  '/app/': typeof AppIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/app' | '/app/' | '/app/items' | '/app/setup' | '/app/purchase' | '/app/production' | '/app/sales' | '/app/counter-sale' | '/app/issue-voucher' | '/app/returns' | '/app/stock' | '/app/accounts' | '/app/reports' | '/app/backup'
+  fullPaths:
+    | '/'
+    | '/app'
+    | '/app/accounts'
+    | '/app/backup'
+    | '/app/counter-sale'
+    | '/app/issue-voucher'
+    | '/app/items'
+    | '/app/production'
+    | '/app/purchase'
+    | '/app/reports'
+    | '/app/returns'
+    | '/app/sales'
+    | '/app/setup'
+    | '/app/stock'
+    | '/app/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/app' | '/app/items' | '/app/setup' | '/app/purchase' | '/app/production' | '/app/sales' | '/app/counter-sale' | '/app/issue-voucher' | '/app/returns' | '/app/stock' | '/app/accounts' | '/app/reports' | '/app/backup'
-  id: '__root__' | '/' | '/app' | '/app/' | '/app/items' | '/app/setup' | '/app/purchase' | '/app/production' | '/app/sales' | '/app/counter-sale' | '/app/issue-voucher' | '/app/returns' | '/app/stock' | '/app/accounts' | '/app/reports' | '/app/backup'
+  to:
+    | '/'
+    | '/app/accounts'
+    | '/app/backup'
+    | '/app/counter-sale'
+    | '/app/issue-voucher'
+    | '/app/items'
+    | '/app/production'
+    | '/app/purchase'
+    | '/app/reports'
+    | '/app/returns'
+    | '/app/sales'
+    | '/app/setup'
+    | '/app/stock'
+    | '/app'
+  id:
+    | '__root__'
+    | '/'
+    | '/app'
+    | '/app/accounts'
+    | '/app/backup'
+    | '/app/counter-sale'
+    | '/app/issue-voucher'
+    | '/app/items'
+    | '/app/production'
+    | '/app/purchase'
+    | '/app/reports'
+    | '/app/returns'
+    | '/app/sales'
+    | '/app/setup'
+    | '/app/stock'
+    | '/app/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -188,39 +233,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
     }
-    '/app/items': {
-      id: '/app/items'
-      path: '/items'
-      fullPath: '/app/items'
-      preLoaderRoute: typeof AppItemsRouteImport
+    '/app/accounts': {
+      id: '/app/accounts'
+      path: '/accounts'
+      fullPath: '/app/accounts'
+      preLoaderRoute: typeof AppAccountsRouteImport
       parentRoute: typeof AppRoute
     }
-    '/app/setup': {
-      id: '/app/setup'
-      path: '/setup'
-      fullPath: '/app/setup'
-      preLoaderRoute: typeof AppSetupRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/app/purchase': {
-      id: '/app/purchase'
-      path: '/purchase'
-      fullPath: '/app/purchase'
-      preLoaderRoute: typeof AppPurchaseRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/app/production': {
-      id: '/app/production'
-      path: '/production'
-      fullPath: '/app/production'
-      preLoaderRoute: typeof AppProductionRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/app/sales': {
-      id: '/app/sales'
-      path: '/sales'
-      fullPath: '/app/sales'
-      preLoaderRoute: typeof AppSalesRouteImport
+    '/app/backup': {
+      id: '/app/backup'
+      path: '/backup'
+      fullPath: '/app/backup'
+      preLoaderRoute: typeof AppBackupRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/counter-sale': {
@@ -237,25 +261,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIssueVoucherRouteImport
       parentRoute: typeof AppRoute
     }
-    '/app/returns': {
-      id: '/app/returns'
-      path: '/returns'
-      fullPath: '/app/returns'
-      preLoaderRoute: typeof AppReturnsRouteImport
+    '/app/items': {
+      id: '/app/items'
+      path: '/items'
+      fullPath: '/app/items'
+      preLoaderRoute: typeof AppItemsRouteImport
       parentRoute: typeof AppRoute
     }
-    '/app/stock': {
-      id: '/app/stock'
-      path: '/stock'
-      fullPath: '/app/stock'
-      preLoaderRoute: typeof AppStockRouteImport
+    '/app/production': {
+      id: '/app/production'
+      path: '/production'
+      fullPath: '/app/production'
+      preLoaderRoute: typeof AppProductionRouteImport
       parentRoute: typeof AppRoute
     }
-    '/app/accounts': {
-      id: '/app/accounts'
-      path: '/accounts'
-      fullPath: '/app/accounts'
-      preLoaderRoute: typeof AppAccountsRouteImport
+    '/app/purchase': {
+      id: '/app/purchase'
+      path: '/purchase'
+      fullPath: '/app/purchase'
+      preLoaderRoute: typeof AppPurchaseRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/reports': {
@@ -265,46 +289,67 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppReportsRouteImport
       parentRoute: typeof AppRoute
     }
-    '/app/backup': {
-      id: '/app/backup'
-      path: '/backup'
-      fullPath: '/app/backup'
-      preLoaderRoute: typeof AppBackupRouteImport
+    '/app/returns': {
+      id: '/app/returns'
+      path: '/returns'
+      fullPath: '/app/returns'
+      preLoaderRoute: typeof AppReturnsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/sales': {
+      id: '/app/sales'
+      path: '/sales'
+      fullPath: '/app/sales'
+      preLoaderRoute: typeof AppSalesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/setup': {
+      id: '/app/setup'
+      path: '/setup'
+      fullPath: '/app/setup'
+      preLoaderRoute: typeof AppSetupRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/stock': {
+      id: '/app/stock'
+      path: '/stock'
+      fullPath: '/app/stock'
+      preLoaderRoute: typeof AppStockRouteImport
       parentRoute: typeof AppRoute
     }
   }
 }
 
 interface AppRouteChildren {
-  AppIndexRoute: typeof AppIndexRoute
-  AppItemsRoute: typeof AppItemsRoute
-  AppSetupRoute: typeof AppSetupRoute
-  AppPurchaseRoute: typeof AppPurchaseRoute
-  AppProductionRoute: typeof AppProductionRoute
-  AppSalesRoute: typeof AppSalesRoute
+  AppAccountsRoute: typeof AppAccountsRoute
+  AppBackupRoute: typeof AppBackupRoute
   AppCounterSaleRoute: typeof AppCounterSaleRoute
   AppIssueVoucherRoute: typeof AppIssueVoucherRoute
-  AppReturnsRoute: typeof AppReturnsRoute
-  AppStockRoute: typeof AppStockRoute
-  AppAccountsRoute: typeof AppAccountsRoute
+  AppItemsRoute: typeof AppItemsRoute
+  AppProductionRoute: typeof AppProductionRoute
+  AppPurchaseRoute: typeof AppPurchaseRoute
   AppReportsRoute: typeof AppReportsRoute
-  AppBackupRoute: typeof AppBackupRoute
+  AppReturnsRoute: typeof AppReturnsRoute
+  AppSalesRoute: typeof AppSalesRoute
+  AppSetupRoute: typeof AppSetupRoute
+  AppStockRoute: typeof AppStockRoute
+  AppIndexRoute: typeof AppIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
-  AppIndexRoute: AppIndexRoute,
-  AppItemsRoute: AppItemsRoute,
-  AppSetupRoute: AppSetupRoute,
-  AppPurchaseRoute: AppPurchaseRoute,
-  AppProductionRoute: AppProductionRoute,
-  AppSalesRoute: AppSalesRoute,
+  AppAccountsRoute: AppAccountsRoute,
+  AppBackupRoute: AppBackupRoute,
   AppCounterSaleRoute: AppCounterSaleRoute,
   AppIssueVoucherRoute: AppIssueVoucherRoute,
-  AppReturnsRoute: AppReturnsRoute,
-  AppStockRoute: AppStockRoute,
-  AppAccountsRoute: AppAccountsRoute,
+  AppItemsRoute: AppItemsRoute,
+  AppProductionRoute: AppProductionRoute,
+  AppPurchaseRoute: AppPurchaseRoute,
   AppReportsRoute: AppReportsRoute,
-  AppBackupRoute: AppBackupRoute,
+  AppReturnsRoute: AppReturnsRoute,
+  AppSalesRoute: AppSalesRoute,
+  AppSetupRoute: AppSetupRoute,
+  AppStockRoute: AppStockRoute,
+  AppIndexRoute: AppIndexRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
