@@ -15,6 +15,7 @@ import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AppAccountsRouteImport } from './routes/app.accounts'
 import { Route as AppBackupRouteImport } from './routes/app.backup'
 import { Route as AppCounterSaleRouteImport } from './routes/app.counter-sale'
+import { Route as AppFormulaRouteImport } from './routes/app.formula'
 import { Route as AppIssueVoucherRouteImport } from './routes/app.issue-voucher'
 import { Route as AppItemsRouteImport } from './routes/app.items'
 import { Route as AppProductionRouteImport } from './routes/app.production'
@@ -53,6 +54,11 @@ const AppBackupRoute = AppBackupRouteImport.update({
 const AppCounterSaleRoute = AppCounterSaleRouteImport.update({
   id: '/counter-sale',
   path: '/counter-sale',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppFormulaRoute = AppFormulaRouteImport.update({
+  id: '/formula',
+  path: '/formula',
   getParentRoute: () => AppRoute,
 } as any)
 const AppIssueVoucherRoute = AppIssueVoucherRouteImport.update({
@@ -107,6 +113,7 @@ export interface FileRoutesByFullPath {
   '/app/accounts': typeof AppAccountsRoute
   '/app/backup': typeof AppBackupRoute
   '/app/counter-sale': typeof AppCounterSaleRoute
+  '/app/formula': typeof AppFormulaRoute
   '/app/issue-voucher': typeof AppIssueVoucherRoute
   '/app/items': typeof AppItemsRoute
   '/app/production': typeof AppProductionRoute
@@ -123,6 +130,7 @@ export interface FileRoutesByTo {
   '/app/accounts': typeof AppAccountsRoute
   '/app/backup': typeof AppBackupRoute
   '/app/counter-sale': typeof AppCounterSaleRoute
+  '/app/formula': typeof AppFormulaRoute
   '/app/issue-voucher': typeof AppIssueVoucherRoute
   '/app/items': typeof AppItemsRoute
   '/app/production': typeof AppProductionRoute
@@ -141,6 +149,7 @@ export interface FileRoutesById {
   '/app/accounts': typeof AppAccountsRoute
   '/app/backup': typeof AppBackupRoute
   '/app/counter-sale': typeof AppCounterSaleRoute
+  '/app/formula': typeof AppFormulaRoute
   '/app/issue-voucher': typeof AppIssueVoucherRoute
   '/app/items': typeof AppItemsRoute
   '/app/production': typeof AppProductionRoute
@@ -160,6 +169,7 @@ export interface FileRouteTypes {
     | '/app/accounts'
     | '/app/backup'
     | '/app/counter-sale'
+    | '/app/formula'
     | '/app/issue-voucher'
     | '/app/items'
     | '/app/production'
@@ -176,6 +186,7 @@ export interface FileRouteTypes {
     | '/app/accounts'
     | '/app/backup'
     | '/app/counter-sale'
+    | '/app/formula'
     | '/app/issue-voucher'
     | '/app/items'
     | '/app/production'
@@ -193,6 +204,7 @@ export interface FileRouteTypes {
     | '/app/accounts'
     | '/app/backup'
     | '/app/counter-sale'
+    | '/app/formula'
     | '/app/issue-voucher'
     | '/app/items'
     | '/app/production'
@@ -252,6 +264,13 @@ declare module '@tanstack/react-router' {
       path: '/counter-sale'
       fullPath: '/app/counter-sale'
       preLoaderRoute: typeof AppCounterSaleRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/formula': {
+      id: '/app/formula'
+      path: '/formula'
+      fullPath: '/app/formula'
+      preLoaderRoute: typeof AppFormulaRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/issue-voucher': {
@@ -324,6 +343,7 @@ interface AppRouteChildren {
   AppAccountsRoute: typeof AppAccountsRoute
   AppBackupRoute: typeof AppBackupRoute
   AppCounterSaleRoute: typeof AppCounterSaleRoute
+  AppFormulaRoute: typeof AppFormulaRoute
   AppIssueVoucherRoute: typeof AppIssueVoucherRoute
   AppItemsRoute: typeof AppItemsRoute
   AppProductionRoute: typeof AppProductionRoute
@@ -340,6 +360,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAccountsRoute: AppAccountsRoute,
   AppBackupRoute: AppBackupRoute,
   AppCounterSaleRoute: AppCounterSaleRoute,
+  AppFormulaRoute: AppFormulaRoute,
   AppIssueVoucherRoute: AppIssueVoucherRoute,
   AppItemsRoute: AppItemsRoute,
   AppProductionRoute: AppProductionRoute,

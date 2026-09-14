@@ -187,6 +187,57 @@ app.delete("/api/items/:id/particulars/:particularId", requireAuth, (req, res) =
   res.json({ ok: true });
 });
 
+app.get("/api/formulas", requireAuth, (_req, res) => {
+  const rows = db
+    .prepare(`
+      SELECT
+        ip.id AS particular_id,
+        ip.item_id,
+        i.name AS item_name,
+        ip.type,
+        ip.formula_code,
+        COALESCE(SUM(fl.value), 0) AS total_value,
+        COALESCE(SUM(fl.cost_value), 0) AS total_cost
+      FROM formulas f
+      JOIN item_particulars ip ON ip.id = f.particular_id
+      JOIN items i ON i.id = ip.item_id
+      LEFT JOIN formula_lines fl ON fl.formula_id = f.id
+      GROUP BY f.id, ip.id, ip.item_id, i.name, ip.type, ip.formula_code
+      ORDER BY i.name ASC, ip.type ASC
+    `)
+    .all();
+
+  res.json(rows.map((row) => ({
+    particular_id: row.particular_id,
+    item_id: row.item_id,
+    item_name: row.item_name,
+    type: row.type,
+    formula_code: row.formula_code,
+    total_value: Number(row.total_value || 0),
+    total_cost: Number(row.total_cost || 0),
+  })));
+});
+
+app.get("/api/formulas/unassigned", requireAuth, (_req, res) => {
+  const rows = db
+    .prepare(`
+      SELECT
+        ip.id AS particular_id,
+        ip.item_id,
+        i.name AS item_name,
+        ip.type,
+        ip.formula_code
+      FROM item_particulars ip
+      JOIN items i ON i.id = ip.item_id
+      LEFT JOIN formulas f ON f.particular_id = ip.id
+      WHERE f.id IS NULL
+      ORDER BY i.name ASC, ip.type ASC
+    `)
+    .all();
+
+  res.json(rows);
+});
+
 app.get("/api/formulas/:particularId", requireAuth, (req, res) => {
   const particularId = Number(req.params.particularId);
   const formula = db.prepare("SELECT * FROM formulas WHERE particular_id = ?").get(particularId);
