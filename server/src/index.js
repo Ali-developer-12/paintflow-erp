@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import db, { applySchema, DB_PATH } from "./db.js";
 import { createSession, destroySession, requireAuth, verifyPassword } from "./auth.js";
+import { calculateProductionRequirements } from "./phase4-logic.js";
 
 applySchema();
 
@@ -51,6 +52,235 @@ app.get("/api/auth/me", requireAuth, (req, res) => res.json({ user: req.user }))
 app.get("/api/factory-items", requireAuth, (_req, res) => {
   const rows = db.prepare("SELECT * FROM factory_items WHERE is_active = 1 ORDER BY name ASC").all();
   res.json(rows);
+});
+
+app.get("/api/suppliers", requireAuth, (_req, res) => {
+  const rows = db.prepare("SELECT * FROM suppliers WHERE is_active = 1 ORDER BY name ASC").all();
+  res.json(rows);
+});
+
+app.post("/api/suppliers", requireAuth, (req, res) => {
+  const name = String(req.body?.name || "").trim();
+  if (!name) return res.status(400).json({ error: "Supplier name is required" });
+
+  const existing = db.prepare("SELECT * FROM suppliers WHERE name = ? AND is_active = 1").get(name);
+  if (existing) return res.status(200).json(existing);
+
+  const insert = db
+    .prepare(
+      "INSERT INTO suppliers (code, name, contact_person, phone, email, address, city, ntn, opening_balance, account_id, is_active, created_at) VALUES (?, ?, '', '', '', '', '', '', 0, NULL, 1, datetime('now'))",
+    )
+    .run(`SUP-${Date.now()}`, name);
+
+  const row = db.prepare("SELECT * FROM suppliers WHERE id = ?").get(insert.lastInsertRowid);
+  res.status(201).json(row);
+});
+
+// ---------- Phase 4: Purchase & Production ----------
+app.get("/api/purchases", requireAuth, (_req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT p.*, s.name AS supplier_name
+       FROM purchases p
+       LEFT JOIN suppliers s ON s.id = p.supplier_id
+       ORDER BY p.id DESC`,
+    )
+    .all();
+  res.json(rows);
+});
+
+app.post("/api/purchases", requireAuth, (req, res) => {
+  const { date = new Date().toISOString().slice(0, 10), supplier_id, supplier_name, bill_no = "", remarks = "", lines = [] } = req.body || {};
+  const normalizedLines = Array.isArray(lines) ? lines : [];
+
+  if (normalizedLines.length === 0) {
+    return res.status(400).json({ error: "At least one purchase line is required" });
+  }
+
+  let effectiveSupplierId = Number(supplier_id || 0);
+  if (!effectiveSupplierId && supplier_name) {
+    const trimmedName = String(supplier_name).trim();
+    if (!trimmedName) return res.status(400).json({ error: "Supplier name is required" });
+
+    const existing = db.prepare("SELECT * FROM suppliers WHERE name = ? AND is_active = 1").get(trimmedName);
+    if (existing) {
+      effectiveSupplierId = Number(existing.id);
+    } else {
+      const insert = db
+        .prepare(
+          "INSERT INTO suppliers (code, name, contact_person, phone, email, address, city, ntn, opening_balance, account_id, is_active, created_at) VALUES (?, ?, '', '', '', '', '', '', 0, NULL, 1, datetime('now'))",
+        )
+        .run(`SUP-${Date.now()}`, trimmedName);
+      effectiveSupplierId = Number(insert.lastInsertRowid);
+    }
+  }
+
+  if (!effectiveSupplierId) {
+    return res.status(400).json({ error: "Supplier selection is required" });
+  }
+
+  const subTotal = normalizedLines.reduce((sum, line) => sum + Number(line.amount || line.qty * line.rate || 0), 0);
+  const voucherNo = `PUR-${Date.now()}`;
+
+  try {
+    const purchaseInsert = db
+      .prepare(
+        "INSERT INTO purchases (voucher_no, date, supplier_id, transporter_id, bill_no, remarks, sub_total, discount, tax, freight, net_total, paid_amount, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?, 0, NULL, datetime('now'))",
+      )
+      .run(voucherNo, String(date), effectiveSupplierId, null, String(bill_no || ""), String(remarks || ""), Number(subTotal || 0), Number(subTotal || 0));
+
+    const purchaseId = Number(purchaseInsert.lastInsertRowid);
+    const lineInsert = db.prepare(
+      "INSERT INTO purchase_lines (purchase_id, factory_item_id, particular_id, description, qty, rate, amount) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    );
+
+    normalizedLines.forEach((line) => {
+      const qty = Number(line.qty || 0);
+      const rate = Number(line.rate || 0);
+      const amount = Number(line.amount ?? qty * rate);
+      const description = String(line.description || line.name || "");
+
+      lineInsert.run(
+        purchaseId,
+        line.factory_item_id != null ? Number(line.factory_item_id) : null,
+        line.particular_id != null ? Number(line.particular_id) : null,
+        description,
+        qty,
+        rate,
+        amount,
+      );
+
+      if (line.factory_item_id != null) {
+        const raw = db.prepare("SELECT stock_qty, name FROM factory_items WHERE id = ?").get(Number(line.factory_item_id));
+        const nextQty = Number(raw?.stock_qty || 0) + qty;
+        db.prepare("UPDATE factory_items SET stock_qty = ? WHERE id = ?").run(nextQty, Number(line.factory_item_id));
+        db.prepare(
+          "INSERT INTO stock_ledger (date, stock_type, factory_item_id, particular_id, ref_type, ref_id, ref_no, qty_in, qty_out, rate, balance_after, remarks, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, datetime('now'))",
+        ).run(String(date), "raw", Number(line.factory_item_id), null, "purchase", purchaseId, voucherNo, qty, rate, nextQty, `Purchase ${voucherNo}`);
+      }
+
+      if (line.particular_id != null) {
+        const particular = db.prepare("SELECT stock_qty FROM item_particulars WHERE id = ?").get(Number(line.particular_id));
+        const nextQty = Number(particular?.stock_qty || 0) + qty;
+        db.prepare("UPDATE item_particulars SET stock_qty = ? WHERE id = ?").run(nextQty, Number(line.particular_id));
+        db.prepare(
+          "INSERT INTO stock_ledger (date, stock_type, factory_item_id, particular_id, ref_type, ref_id, ref_no, qty_in, qty_out, rate, balance_after, remarks, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, datetime('now'))",
+        ).run(String(date), "finished", null, Number(line.particular_id), "purchase", purchaseId, voucherNo, qty, rate, nextQty, `Purchase ${voucherNo}`);
+      }
+    });
+
+    const purchase = db.prepare("SELECT * FROM purchases WHERE id = ?").get(purchaseId);
+    const savedLines = db.prepare("SELECT * FROM purchase_lines WHERE purchase_id = ? ORDER BY id ASC").all(purchaseId);
+    res.status(201).json({ purchase, lines: savedLines });
+  } catch (error) {
+    res.status(400).json({ error: error.message || "Unable to save purchase" });
+  }
+});
+
+app.get("/api/productions", requireAuth, (_req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT p.*, i.name AS item_name, ip.type AS particular_type
+       FROM productions p
+       JOIN item_particulars ip ON ip.id = p.particular_id
+       JOIN items i ON i.id = ip.item_id
+       ORDER BY p.id DESC`,
+    )
+    .all();
+  res.json(rows);
+});
+
+app.post("/api/productions", requireAuth, (req, res) => {
+  const { date = new Date().toISOString().slice(0, 10), particular_id, batch_quantity, remarks = "" } = req.body || {};
+  const particularId = Number(particular_id || 0);
+  const producedQty = Number(batch_quantity || 0);
+
+  if (!particularId || producedQty <= 0) {
+    return res.status(400).json({ error: "Please select a valid item and batch quantity" });
+  }
+
+  const formula = db.prepare("SELECT * FROM formulas WHERE particular_id = ?").get(particularId);
+  if (!formula) {
+    return res.status(400).json({ error: "No formula found for this particular. Create a Formula/BOM first." });
+  }
+
+  const formulaLines = db
+    .prepare("SELECT * FROM formula_lines WHERE formula_id = ? ORDER BY sort_order ASC, id ASC")
+    .all(formula.id);
+
+  if (formulaLines.length === 0) {
+    return res.status(400).json({ error: "This formula has no material lines yet." });
+  }
+
+  const calculation = calculateProductionRequirements(formulaLines, producedQty, Number(formula.batch_size || 1));
+
+  for (const line of calculation.lines) {
+    if (!line.factory_item_id) {
+      return res.status(400).json({ error: `Material ${line.material_name || "unknown"} is missing a raw material reference.` });
+    }
+
+    const item = db.prepare("SELECT id, name, stock_qty FROM factory_items WHERE id = ?").get(Number(line.factory_item_id));
+    if (!item) {
+      return res.status(400).json({ error: `Raw material not found: ${line.material_name || "unknown"}` });
+    }
+
+    if (Number(item.stock_qty || 0) < Number(line.qtyRequired || 0)) {
+      return res.status(400).json({
+        error: `Insufficient stock for ${item.name}. Available ${Number(item.stock_qty || 0)}, required ${Number(line.qtyRequired || 0)}.`,
+      });
+    }
+  }
+
+  const productionVoucherNo = `PRO-${Date.now()}`;
+  const particular = db.prepare("SELECT * FROM item_particulars WHERE id = ?").get(particularId);
+  const currentStock = Number(particular?.stock_qty || 0);
+
+  const productionInsert = db
+    .prepare(
+      "INSERT INTO productions (voucher_no, date, particular_id, batches, produced_qty, material_cost, overhead_cost, total_cost, remarks, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, NULL, datetime('now'))",
+    )
+    .run(productionVoucherNo, String(date), particularId, Number(calculation.batchMultiplier || 0), producedQty, Number(calculation.totalMaterialCost || 0), Number(calculation.totalMaterialCost || 0), String(remarks || ""));
+
+  const productionId = Number(productionInsert.lastInsertRowid);
+  const consumptionInsert = db.prepare(
+    "INSERT INTO production_consumptions (production_id, factory_item_id, material_name, qty, rate, amount) VALUES (?, ?, ?, ?, ?, ?)",
+  );
+
+  for (const line of calculation.lines) {
+    const factoryItemId = Number(line.factory_item_id || 0);
+    const qtyRequired = Number(line.qtyRequired || 0);
+    const rate = Number(line.rate || 0);
+    const amount = Number(line.amount || 0);
+
+    db.prepare("UPDATE factory_items SET stock_qty = stock_qty - ? WHERE id = ?").run(qtyRequired, factoryItemId);
+    db.prepare(
+      "INSERT INTO stock_ledger (date, stock_type, factory_item_id, particular_id, ref_type, ref_id, ref_no, qty_in, qty_out, rate, balance_after, remarks, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, datetime('now'))",
+    ).run(
+      String(date),
+      "raw",
+      factoryItemId,
+      null,
+      "production",
+      productionId,
+      productionVoucherNo,
+      qtyRequired,
+      rate,
+      Number(db.prepare("SELECT stock_qty FROM factory_items WHERE id = ?").get(factoryItemId).stock_qty),
+      `Production ${productionVoucherNo}`,
+    );
+
+    consumptionInsert.run(productionId, factoryItemId, String(line.material_name || ""), qtyRequired, rate, amount);
+  }
+
+  db.prepare("UPDATE item_particulars SET stock_qty = ? WHERE id = ?").run(currentStock + producedQty, particularId);
+  db.prepare(
+    "INSERT INTO stock_ledger (date, stock_type, factory_item_id, particular_id, ref_type, ref_id, ref_no, qty_in, qty_out, rate, balance_after, remarks, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, datetime('now'))",
+  ).run(String(date), "finished", null, particularId, "production", productionId, productionVoucherNo, producedQty, currentStock + producedQty, `Produced ${producedQty}`);
+
+  const production = db.prepare("SELECT * FROM productions WHERE id = ?").get(productionId);
+  const consumptions = db.prepare("SELECT * FROM production_consumptions WHERE production_id = ? ORDER BY id ASC").all(productionId);
+
+  res.status(201).json({ production, consumptions, calculation });
 });
 
 // ---------- Phase 2: Items & Formula/BOM ----------
