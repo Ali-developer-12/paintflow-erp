@@ -175,6 +175,10 @@ app.post("/api/purchases", requireAuth, (req, res) => {
     return res.status(400).json({ error: "At least one purchase line is required" });
   }
 
+  if (normalizedLines.some((line) => Number(line?.qty) <= 0 || !Number.isFinite(Number(line?.qty)))) {
+    return res.status(400).json({ error: "Quantity must be greater than 0" });
+  }
+
   let effectiveSupplierId = Number(supplier_id || 0);
   if (!effectiveSupplierId && supplier_name) {
     const trimmedName = String(supplier_name).trim();
@@ -564,21 +568,20 @@ app.get("/api/formulas/:particularId", requireAuth, (req, res) => {
 
 app.post("/api/formulas/:particularId", requireAuth, (req, res) => {
   const particularId = Number(req.params.particularId);
-  const { code = "", batch_size = 1, total_cost = 0, remarks = "", lines = [] } = req.body || {};
+  const { code = "", batch_size = 1, remarks = "", lines = [] } = req.body || {};
 
   let formula = db.prepare("SELECT * FROM formulas WHERE particular_id = ?").get(particularId);
   if (formula) {
-    db.prepare("UPDATE formulas SET code = ?, batch_size = ?, total_cost = ?, remarks = ?, updated_at = datetime('now') WHERE id = ?").run(
+    db.prepare("UPDATE formulas SET code = ?, batch_size = ?, remarks = ?, updated_at = datetime('now') WHERE id = ?").run(
       String(code || ""),
       Number(batch_size || 1),
-      Number(total_cost || 0),
       String(remarks || ""),
       formula.id,
     );
   } else {
     const insert = db
       .prepare("INSERT INTO formulas (particular_id, code, batch_size, total_cost, remarks, updated_at) VALUES (?, ?, ?, ?, ?, datetime('now'))")
-      .run(particularId, String(code || ""), Number(batch_size || 1), Number(total_cost || 0), String(remarks || ""));
+      .run(particularId, String(code || ""), Number(batch_size || 1), 0, String(remarks || ""));
 
     formula = db.prepare("SELECT * FROM formulas WHERE id = ?").get(insert.lastInsertRowid);
   }
@@ -603,6 +606,9 @@ app.post("/api/formulas/:particularId", requireAuth, (req, res) => {
       index + 1,
     );
   });
+
+  const totals = db.prepare("SELECT COALESCE(SUM(value), 0) AS total_value, COALESCE(SUM(cost_value), 0) AS total_cost FROM formula_lines WHERE formula_id = ?").get(formula.id);
+  db.prepare("UPDATE formulas SET total_cost = ? WHERE id = ?").run(Number(totals.total_cost), formula.id);
 
   const fresh = db.prepare("SELECT * FROM formulas WHERE id = ?").get(formula.id);
   const storedLines = db.prepare("SELECT * FROM formula_lines WHERE formula_id = ? ORDER BY sort_order ASC, id ASC").all(formula.id);

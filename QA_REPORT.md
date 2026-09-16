@@ -25,7 +25,7 @@ Method: real local Express server and SQLite database exercised over the authent
 | 16 | Purchase | PASS | Saved 20 KG @ 80 purchase against shim supplier. |
 | 17 | Purchase | PASS | Solvent became 130 KG, exactly +20. |
 | 18 | Purchase | PASS | Ledger `PUR-1789580390473`: qty in 20, balance 130. |
-| 19 | Purchase | FAIL | Zero-quantity purchase was accepted and wrote a ledger row. |
+| 19 | Purchase | FIXED | Re-test: zero and negative quantities now return 400; purchase and ledger counts remain unchanged. |
 | 20 | Production | PASS | Before run: Solvent 130 KG; finished good 0 KG. |
 | 21 | Production | PASS | Produced a 10-unit batch. |
 | 22 | Production | PASS | Batch multiplier 10/10=1; expected Solvent use 2+2=4 KG. |
@@ -42,7 +42,9 @@ Method: real local Express server and SQLite database exercised over the authent
 
 ## Failed or suspicious findings
 
-### F-01 — Zero-quantity purchase is recorded as a real transaction
+### F-01 — Zero-quantity purchase is recorded as a real transaction — FIXED
+
+Fix verification (2026-09-16): `POST /api/purchases` now validates every line before any write. Both `qty: 0` and `qty: -1` returned 400 `Quantity must be greater than 0`; purchase count stayed 3 and raw-item ledger count stayed 5. A subsequent valid 1 KG purchase returned 201.
 
 Severity: Medium
 
@@ -58,7 +60,9 @@ Actual: request succeeded; `PUR-1789580390506` was created with `qty_in: 0`, `qt
 
 Likely responsible: `server/src/index.js`, `POST /api/purchases`. It validates only that at least one line exists, not that every saved line has a positive quantity.
 
-### S-01 — Formula header total is stale/zero while line calculations are correct
+### S-01 — Formula header total is stale/zero while line calculations are correct — FIXED
+
+Fix verification (2026-09-16): the server now derives `formulas.total_cost` from the rows it has just stored. Re-saving the two-line formula while deliberately sending `total_cost: 999999` returned persisted line costs 20 and 40 and header total 60.
 
 Severity: Low / suspicious
 
