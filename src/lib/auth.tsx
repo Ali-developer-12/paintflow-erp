@@ -25,7 +25,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const handleUnauthorized = () => {
+    const handleUnauthorized = (event: Event) => {
+      const token = (event as CustomEvent<{ token: string | null }>).detail?.token;
+      if (token !== getToken()) return;
       clearSession();
       setUser(null);
     };
@@ -42,10 +44,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     void apiGet<{ user: AuthUser }>("/auth/me")
       .then(({ user: currentUser }) => {
+        if (token !== getToken()) return;
         storeSession(token, currentUser);
         setUser(currentUser);
       })
       .catch((error: unknown) => {
+        if (token !== getToken()) return;
         if (error instanceof ApiError && error.status !== 401) {
           setUser(storedUser);
           return;
