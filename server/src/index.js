@@ -1,9 +1,16 @@
 import express from "express";
 import cors from "cors";
 import db, { applySchema, DB_PATH } from "./db.js";
-import { createSession, destroySession, requireAuth, verifyPassword } from "./auth.js";
+import { createSession, destroySession, hashPassword, requireAuth, verifyPassword } from "./auth.js";
 
 applySchema();
+
+if (db.prepare("SELECT 1 FROM users LIMIT 1").get() === undefined) {
+  const { hash, salt } = hashPassword("admin123");
+  db.prepare(
+    "INSERT INTO users (username, password_hash, password_salt, full_name, role) VALUES (?, ?, ?, ?, ?)",
+  ).run("admin", hash, salt, "System Administrator", "admin");
+}
 
 const app = express();
 app.use(cors());
