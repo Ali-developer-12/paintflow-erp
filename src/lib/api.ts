@@ -74,6 +74,9 @@ export async function api<T = unknown>(
   }
 
   if (res.status === 401) {
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("paint-erp:unauthorized"));
+    }
     clearSession();
     throw new ApiError("Session expired. Please sign in again.", 401);
   }

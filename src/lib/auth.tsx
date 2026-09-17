@@ -1,6 +1,15 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { apiPost, clearSession, getStoredUser, storeSession, type AuthUser } from "./api";
+import {
+  apiGet,
+  apiPost,
+  ApiError,
+  clearSession,
+  getStoredUser,
+  getToken,
+  storeSession,
+  type AuthUser,
+} from "./api";
 
 type AuthState = {
   user: AuthUser | null;
@@ -16,8 +25,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    setUser(getStoredUser());
-    setReady(true);
+    const handleUnauthorized = () => {
+      clearSession();
+      setUser(null);
+    };
+    window.addEventListener("paint-erp:unauthorized", handleUnauthorized);
+
+    const storedUser = getStoredUser();
+    const token = getToken();
+    if (!storedUser || !token) {
+      clearSession();
+      setUser(null);
+      setReady(true);
+      return () => window.removeEventListener("paint-erp:unauthorized", handleUnauthorized);
+    }
+
+    void apiGet<{ user: AuthUser }>("/auth/me")
+      .then(({ user: currentUser }) => {
+        storeSession(token, currentUser);
+        setUser(currentUser);
+      })
+      .catch((error: unknown) => {
+        if (error instanceof ApiError && error.status !== 401) {
+          setUser(storedUser);
+          return;
+        }
+        clearSession();
+        setUser(null);
+      })
+      .finally(() => setReady(true));
+
+    return () => window.removeEventListener("paint-erp:unauthorized", handleUnauthorized);
   }, []);
 
   const login = useCallback(async (username: string, password: string) => {
