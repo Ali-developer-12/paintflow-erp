@@ -63,6 +63,7 @@ function PurchasePage() {
   const [supplierNameInput, setSupplierNameInput] = useState("");
   const [lines, setLines] = useState<PurchaseLine[]>([makeLine()]);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -92,6 +93,8 @@ function PurchasePage() {
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unable to load purchase data");
+      } finally {
+        setIsLoading(false);
       }
     })();
   }, []);
@@ -204,6 +207,7 @@ function PurchasePage() {
       </div>
 
       <div className="rounded-md border border-border bg-card p-4">
+        {isLoading && <div className="mb-4 rounded-md bg-muted/40 px-3 py-2 text-sm text-muted-foreground">Loading purchase data...</div>}
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <label className="text-sm font-medium">Supplier</label>

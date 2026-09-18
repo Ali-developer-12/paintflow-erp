@@ -61,6 +61,7 @@ function FormulaPage() {
   const [modalParticular, setModalParticular] = useState<Particular | null>(null);
   const [modalItemName, setModalItemName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   async function loadFactoryItems() {
     const items = await apiGet<FactoryItem[]>("/factory-items");
@@ -87,6 +88,8 @@ function FormulaPage() {
       setLoading(true);
       try {
         await Promise.all([loadFormulas(), loadUnassigned(), loadFactoryItems()]);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Unable to load formula data");
       } finally {
         setLoading(false);
       }
@@ -109,6 +112,7 @@ function FormulaPage() {
       </div>
 
       <section className="rounded-md border border-border bg-card">
+        {error && <div className="m-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>}
         {loading && <div className="p-3 text-sm text-muted-foreground">Loading formulas…</div>}
 
         {!loading && rows.length === 0 && (

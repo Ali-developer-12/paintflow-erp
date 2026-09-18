@@ -28,6 +28,10 @@ Phase 6 is complete for Stock + Accounts. The Stock screen reads current balance
 
 Phase 3 remains the dependency for full customer/supplier master data, so empty party states are intentional. Phase 5 sale-side movements and customer activity will appear automatically once that phase writes the existing sales/account tables. Phase 8 is next and final for this branch.
 
+## Phase 8 Progress
+
+Phase 8 polish is complete for the Phase 2, 4, and 6 surfaces; Electron desktop packaging is deferred. The shared API client now converts non-JSON server failures into readable messages. Items and Formula/BOM now surface load, save, delete, and inline-edit failures instead of leaving rejected requests unhandled. Stock keeps a visible initial loading message and reports readable summary/ledger failures. Existing empty states and responsive table overflow behavior were preserved. TypeScript diagnostics are clean; npm lint/build could not be executed because Node/npm are not available on the current shell PATH.
+
 ## Phase Checklist
 
 - [x] Phase 2: Items & Formula/BOM
@@ -36,4 +40,4 @@ Phase 3 remains the dependency for full customer/supplier master data, so empty 
 - [ ] Phase 5: Sales & Vouchers (Counter Sale, Issue Voucher, Return)
 - [x] Phase 6: Stock & Accounts
 - [ ] Phase 7: Reports & Backup
-- [ ] Phase 8: Electron desktop packaging & polish
+- [x] Phase 8: Polish complete; Electron packaging deferred

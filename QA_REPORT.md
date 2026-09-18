@@ -46,6 +46,8 @@ Method: real local Express server and SQLite database exercised over the authent
 
 Fix verification (2026-09-16): `POST /api/purchases` now validates every line before any write. Both `qty: 0` and `qty: -1` returned 400 `Quantity must be greater than 0`; purchase count stayed 3 and raw-item ledger count stayed 5. A subsequent valid 1 KG purchase returned 201.
 
+Data cleanup (2026-09-18): manually removed the pre-fix zero-quantity test purchase `PUR-1789580390506`, its line, and its zero-movement stock ledger row; Solvent remains at the correct 127 KG balance.
+
 Severity: Medium
 
 Steps to reproduce:

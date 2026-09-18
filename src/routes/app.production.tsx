@@ -48,6 +48,7 @@ function ProductionPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     void (async () => {
@@ -61,6 +62,8 @@ function ProductionPage() {
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unable to load formulas");
+      } finally {
+        setIsLoading(false);
       }
     })();
   }, []);
@@ -144,6 +147,7 @@ function ProductionPage() {
       </div>
 
       <div className="rounded-md border border-border bg-card p-4">
+        {isLoading && <div className="mb-4 rounded-md bg-muted/40 px-3 py-2 text-sm text-muted-foreground">Loading production data...</div>}
         {formulaRows.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 rounded-md border border-dashed border-border p-8 text-sm text-muted-foreground">
             <Factory className="h-6 w-6" />
