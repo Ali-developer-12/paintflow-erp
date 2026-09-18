@@ -79,6 +79,38 @@ Actual: each `formula_lines.cost_value` is correct (20 and 40), but `formulas.to
 
 Likely responsible: `server/src/index.js`, `POST /api/formulas/:particularId`, which persists request `total_cost` instead of deriving it from stored lines.
 
+## Phase 8 Polish QA — 2026-09-18
+
+Method: authenticated HTTP regression probes were run against the real local API. Browser-based checks could not be executed because the required Playwright Chromium executable was not installed in the environment; no visual result is inferred from source inspection.
+
+| Test | Area | Result | Evidence / notes |
+| --- | --- | --- | --- |
+| 1 | Backend-off error handling on Items, Formula/BOM, Purchase, Production, Stock | BLOCKED | Browser automation unavailable; the UI could not be opened to stop/restart the backend and trigger actions. |
+| 2 | Recovery after backend restart | BLOCKED | Browser automation unavailable. |
+| 3 | Invalid Items and Formula/BOM saves | BLOCKED | Browser automation unavailable; direct API validation was not substituted for the requested UI interaction. |
+| 4 | Slow-network loading indicators | BLOCKED | Browser automation unavailable; throttled reloads could not be performed. |
+| 5 | Items empty state for zero particulars | BLOCKED | Browser automation unavailable. |
+| 6 | Formula/BOM unassigned-particular state | BLOCKED | Browser automation unavailable. |
+| 7 | Purchase and production regression | FAIL | Valid purchase of 1 KG Solvent at 75 returned success and raised stock 127 -> 128 KG. A valid 1-unit production request for formula particular 5 returned HTTP 500; finished stock remained 10 KG and raw stock remained 128 KG. |
+| 8 | F-01 and S-01 invariants | PASS | Zero-quantity purchase returned HTTP 400. Formula detail reported header total 60 with line costs 20 and 40. |
+| 9 | Responsive layout at approximately 768px | BLOCKED | Browser automation unavailable; no viewport resize or visual inspection was possible. |
+
+### Phase 8 failure — valid production request returns HTTP 500
+
+Steps to reproduce:
+
+1. Authenticate as `admin`.
+2. Use the existing formula at particular ID `5`, whose batch size is 10 and whose two lines require 2 KG each.
+3. POST `/api/productions` with `{"particular_id":5,"batch_quantity":1,"remarks":"Phase 8 QA"}`.
+
+Expected: HTTP 201, raw stock reduced by 0.4 KG, and finished stock increased by 1 KG.
+
+Actual: HTTP 500 `InternalServerError`; stock remained unchanged at Solvent 128 KG and finished item 10 KG.
+
+Likely responsible: `server/src/index.js`, `POST /api/productions`, or the production transaction path it invokes. The failure is backend-side and should be diagnosed before merge.
+
+Overall verdict: Phase 8 polish needs another pass before this branch is ready to merge; the browser QA suite is environment-blocked and the valid production regression currently fails with HTTP 500.
+
 ## Confidence assessment
 
 Phase 2 item CRUD and formula-line persistence are suitable for further user testing: validation, persistence, edit, and delete paths worked. The formula header total should not yet be relied upon for reporting until S-01 is clarified.
