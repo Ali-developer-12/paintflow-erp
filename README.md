@@ -1,7 +1,5 @@
 # PaintFlow ERP
 
-Lovable AI — Build Prompt: Paint Factory ERP (Full Project)
-
 Paste this as your project prompt / first message in Lovable.
 
 PROJECT OVERVIEW
@@ -158,7 +156,7 @@ Begin Phase 1.
 
 This project was built with [Lovable](https://lovable.dev).
 
-## Build with Lovable
+## Build by Little Dev
 
 Continue developing this project in the [Lovable editor](https://lovable.dev/projects/6337c550-3e6f-4d6b-b88c-20800f99a047).
 
