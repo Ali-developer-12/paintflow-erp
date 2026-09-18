@@ -1,16 +1,19 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { ModulePlaceholder } from "@/components/module-placeholder";
+import { useEffect, useState } from "react";
+import { BookOpenCheck } from "lucide-react";
+import { apiGet } from "@/lib/api";
 
-export const Route = createFileRoute("/app/accounts")({
-  component: AccountsPage,
-});
+type Account = { id: number; code: string; name: string; type: string; parent_id: number | null };
+type Party = { id: number; name: string };
+type PartyLedger = { balance: number; rows: { date: string; reference: string; narration: string; debit: number; credit: number; balance: number }[] };
+const amount = (value: number) => Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
+export const Route = createFileRoute("/app/accounts")({ component: AccountsPage });
 
 function AccountsPage() {
-  return (
-    <ModulePlaceholder
-      title="Accounts"
-      phase="Phase 6"
-      description="Accounts, account ledger, and finance workflows will be added in Phase 6."
-    />
-  );
+  const [accounts, setAccounts] = useState<Account[]>([]); const [partyType, setPartyType] = useState<"supplier" | "customer">("supplier"); const [parties, setParties] = useState<Party[]>([]); const [partyId, setPartyId] = useState(""); const [ledger, setLedger] = useState<PartyLedger | null>(null); const [error, setError] = useState("");
+  useEffect(() => { void apiGet<Account[]>("/accounts").then(setAccounts).catch((err) => setError(err.message)); }, []);
+  useEffect(() => { setPartyId(""); setLedger(null); void apiGet<Party[]>(`/accounts/parties/${partyType}`).then(setParties).catch((err) => setError(err.message)); }, [partyType]);
+  useEffect(() => { if (partyId) void apiGet<PartyLedger>(`/accounts/party-ledger?party_type=${partyType}&party_id=${partyId}`).then(setLedger).catch((err) => setError(err.message)); }, [partyType, partyId]);
+  return <div className="flex min-h-[calc(100vh-120px)] flex-col gap-4 p-4"><div><h1 className="text-2xl font-semibold tracking-tight">Accounts</h1><p className="text-sm text-muted-foreground">Chart of accounts and party balances</p></div>{error && <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>}<section className="rounded-md border border-border bg-card p-4"><h2 className="mb-3 text-base font-semibold">Chart of accounts</h2>{accounts.length === 0 ? <Empty text="No accounts have been configured yet." /> : <div className="overflow-x-auto"><table className="min-w-full text-sm"><thead className="bg-muted/40 text-left"><tr><th className="px-3 py-2">Code</th><th className="px-3 py-2">Account</th><th className="px-3 py-2">Type</th></tr></thead><tbody>{accounts.map((account) => <tr className="border-t border-border" key={account.id}><td className="px-3 py-2">{account.code}</td><td className="px-3 py-2 font-medium">{account.parent_id ? "↳ " : ""}{account.name}</td><td className="px-3 py-2 capitalize">{account.type}</td></tr>)}</tbody></table></div>}</section><section className="rounded-md border border-border bg-card p-4"><div className="mb-3 flex flex-wrap items-end gap-3"><div><label className="mb-1 block text-sm font-medium">Party type</label><select className="rounded-md border border-border bg-background px-3 py-2 text-sm" value={partyType} onChange={(e) => setPartyType(e.target.value as "supplier" | "customer")}><option value="supplier">Supplier</option><option value="customer">Customer</option></select></div><div><label className="mb-1 block text-sm font-medium">Party</label><select className="rounded-md border border-border bg-background px-3 py-2 text-sm" value={partyId} onChange={(e) => setPartyId(e.target.value)}><option value="">Select a {partyType}</option>{parties.map((party) => <option key={party.id} value={party.id}>{party.name}</option>)}</select></div>{ledger && <div className="rounded-md bg-muted px-3 py-2 text-sm">Current balance: <span className="font-semibold">{amount(ledger.balance)}</span></div>}</div>{parties.length === 0 ? <Empty text={`No ${partyType}s are available yet. Add them in Setup / Masters when Phase 3 is available.`} /> : !ledger ? <Empty text={`Select a ${partyType} to view their ledger.`} /> : ledger.rows.length === 0 ? <Empty text="This party has no balance-affecting transactions yet." /> : <div className="overflow-x-auto"><table className="min-w-full text-sm"><thead className="bg-muted/40 text-left"><tr><th className="px-3 py-2">Date</th><th className="px-3 py-2">Reference</th><th className="px-3 py-2">Narration</th><th className="px-3 py-2">Debit</th><th className="px-3 py-2">Credit</th><th className="px-3 py-2">Balance</th></tr></thead><tbody>{ledger.rows.map((row, index) => <tr className="border-t border-border" key={`${row.reference}-${index}`}><td className="px-3 py-2">{row.date || "—"}</td><td className="px-3 py-2">{row.reference}</td><td className="px-3 py-2">{row.narration}</td><td className="px-3 py-2">{amount(row.debit)}</td><td className="px-3 py-2">{amount(row.credit)}</td><td className="px-3 py-2 font-medium">{amount(row.balance)}</td></tr>)}</tbody></table></div>}</section></div>;
 }
+function Empty({ text }: { text: string }) { return <div className="flex flex-col items-center justify-center gap-2 rounded-md border border-dashed border-border p-8 text-sm text-muted-foreground"><BookOpenCheck className="h-6 w-6" />{text}</div>; }

@@ -24,7 +24,13 @@ Production calculation logic: the server-side helper in `server/src/phase4-logic
 
 Temporary supplier shim: the purchase screen includes a simple inline "add supplier name" fallback when the `suppliers` table is empty because Phase 3 supplier CRUD is not yet implemented. This is intentional and should be removed once the real supplier management UI is added in Phase 3.
 
-Phase 6 is not started yet.
+Phase 6 is complete for Stock + Accounts. The Stock screen reads current balances from the existing `factory_items` / `item_particulars` records and movement history from the shared `stock_ledger` table written by Purchase and Production. Ledger rows use the persisted `balance_after` value, with item and date-range filters applied server-side. The Accounts screen reads the existing `accounts` chart and provides supplier/customer running-balance ledgers. Supplier purchases are shown directly (Phase 4 does not post account vouchers), and mapped `account_ledger` entries are included when present.
+
+Phase 3 remains the dependency for full customer/supplier master data, so empty party states are intentional. Phase 5 sale-side movements and customer activity will appear automatically once that phase writes the existing sales/account tables. Phase 8 is next and final for this branch.
+
+## Phase 8 Progress
+
+Phase 8 polish is complete for the Phase 2, 4, and 6 surfaces; Electron desktop packaging is deferred. The shared API client now converts non-JSON server failures into readable messages. Items and Formula/BOM now surface load, save, delete, and inline-edit failures instead of leaving rejected requests unhandled. Stock keeps a visible initial loading message and reports readable summary/ledger failures. Existing empty states and responsive table overflow behavior were preserved. TypeScript diagnostics are clean; npm lint/build could not be executed because Node/npm are not available on the current shell PATH.
 
 ## Phase Checklist
 
@@ -32,6 +38,6 @@ Phase 6 is not started yet.
 - [ ] Phase 3: Setup / Masters (Employees, Customers, Suppliers, Transporters, Account Chart, Factory Items)
 - [x] Phase 4: Purchase & Production
 - [ ] Phase 5: Sales & Vouchers (Counter Sale, Issue Voucher, Return)
-- [ ] Phase 6: Stock & Accounts
+- [x] Phase 6: Stock & Accounts
 - [ ] Phase 7: Reports & Backup
-- [ ] Phase 8: Electron desktop packaging & polish
+- [x] Phase 8: Polish complete; Electron packaging deferred

@@ -76,6 +76,84 @@ app.post("/api/suppliers", requireAuth, (req, res) => {
   res.status(201).json(row);
 });
 
+// ---------- Phase 6: Stock & Accounts views ----------
+app.get("/api/stock/summary", requireAuth, (_req, res) => {
+  const rows = db.prepare(
+    `SELECT fi.id, fi.name, fi.code, fi.unit, fi.stock_qty, fi.min_qty, fi.max_qty, 'raw' AS stock_type
+     FROM factory_items fi WHERE fi.is_active = 1
+     UNION ALL
+     SELECT ip.id, TRIM(i.name || CASE WHEN COALESCE(ip.type, '') = '' THEN '' ELSE ' / ' || ip.type END), i.code, COALESCE(ip.weight_unit, ''), ip.stock_qty, ip.min_qty, ip.max_qty, 'finished'
+     FROM item_particulars ip JOIN items i ON i.id = ip.item_id WHERE i.is_active = 1
+     ORDER BY name COLLATE NOCASE ASC`,
+  ).all();
+  res.json(rows);
+});
+
+app.get("/api/stock/ledger", requireAuth, (req, res) => {
+  const { item_id: itemId, stock_type: stockType, from, to } = req.query;
+  const filters = [];
+  const params = [];
+  if (stockType === "raw" || stockType === "finished") {
+    filters.push("sl.stock_type = ?"); params.push(stockType);
+  }
+  if (itemId) {
+    filters.push("((sl.stock_type = 'raw' AND sl.factory_item_id = ?) OR (sl.stock_type = 'finished' AND sl.particular_id = ?))");
+    params.push(Number(itemId), Number(itemId));
+  }
+  if (from) { filters.push("sl.date >= ?"); params.push(String(from)); }
+  if (to) { filters.push("sl.date <= ?"); params.push(String(to)); }
+  const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+  const rows = db.prepare(
+    `SELECT sl.*, COALESCE(fi.name, TRIM(i.name || CASE WHEN COALESCE(ip.type, '') = '' THEN '' ELSE ' / ' || ip.type END)) AS item_name,
+            COALESCE(fi.unit, ip.weight_unit, '') AS unit
+     FROM stock_ledger sl
+     LEFT JOIN factory_items fi ON fi.id = sl.factory_item_id
+     LEFT JOIN item_particulars ip ON ip.id = sl.particular_id
+     LEFT JOIN items i ON i.id = ip.item_id
+     ${where}
+     ORDER BY sl.date ASC, sl.id ASC`,
+  ).all(...params);
+  res.json(rows);
+});
+
+app.get("/api/accounts", requireAuth, (_req, res) => {
+  res.json(db.prepare("SELECT * FROM accounts WHERE is_active = 1 ORDER BY code ASC, id ASC").all());
+});
+
+app.get("/api/accounts/parties/:partyType", requireAuth, (req, res) => {
+  const partyType = req.params.partyType;
+  if (partyType !== "supplier" && partyType !== "customer") return res.status(400).json({ error: "Invalid party type" });
+  const table = partyType === "supplier" ? "suppliers" : "customers";
+  res.json(db.prepare(`SELECT id, name, opening_balance, account_id FROM ${table} WHERE is_active = 1 ORDER BY name COLLATE NOCASE`).all());
+});
+
+app.get("/api/accounts/party-ledger", requireAuth, (req, res) => {
+  const partyType = String(req.query.party_type || "");
+  const partyId = Number(req.query.party_id || 0);
+  if ((partyType !== "supplier" && partyType !== "customer") || !partyId) return res.status(400).json({ error: "Choose a valid party" });
+  const table = partyType === "supplier" ? "suppliers" : "customers";
+  const party = db.prepare(`SELECT id, name, opening_balance, account_id FROM ${table} WHERE id = ? AND is_active = 1`).get(partyId);
+  if (!party) return res.status(404).json({ error: "Party not found" });
+  const transactions = [];
+  const opening = Number(party.opening_balance || 0);
+  if (opening) transactions.push({ date: "", reference: "Opening balance", narration: "Opening balance", debit: partyType === "customer" ? opening : 0, credit: partyType === "supplier" ? opening : 0 });
+  if (partyType === "supplier") {
+    db.prepare("SELECT date, voucher_no, net_total, paid_amount, remarks FROM purchases WHERE supplier_id = ? ORDER BY date ASC, id ASC").all(partyId)
+      .forEach((row) => transactions.push({ date: row.date, reference: row.voucher_no, narration: row.remarks || "Purchase", debit: Number(row.paid_amount || 0), credit: Number(row.net_total || 0) }));
+  } else {
+    db.prepare("SELECT date, voucher_no, net_total, paid_amount, remarks FROM sales WHERE customer_id = ? ORDER BY date ASC, id ASC").all(partyId)
+      .forEach((row) => transactions.push({ date: row.date, reference: row.voucher_no, narration: row.remarks || "Sale", debit: Number(row.net_total || 0), credit: Number(row.paid_amount || 0) }));
+  }
+  if (party.account_id) {
+    db.prepare("SELECT al.date, av.voucher_no, al.debit, al.credit, al.narration FROM account_ledger al LEFT JOIN account_vouchers av ON av.id = al.voucher_id WHERE al.account_id = ? ORDER BY al.date ASC, al.id ASC").all(party.account_id)
+      .forEach((row) => transactions.push({ date: row.date, reference: row.voucher_no || "Journal", narration: row.narration || "Account entry", debit: Number(row.debit || 0), credit: Number(row.credit || 0) }));
+  }
+  let balance = opening;
+  const isSupplier = partyType === "supplier";
+  const rows = transactions.map((row) => { balance += isSupplier ? row.credit - row.debit : row.debit - row.credit; return { ...row, balance }; });
+  res.json({ party, balance, rows });
+});
+
 // ---------- Phase 4: Purchase & Production ----------
 app.get("/api/purchases", requireAuth, (_req, res) => {
   const rows = db
@@ -95,6 +173,10 @@ app.post("/api/purchases", requireAuth, (req, res) => {
 
   if (normalizedLines.length === 0) {
     return res.status(400).json({ error: "At least one purchase line is required" });
+  }
+
+  if (normalizedLines.some((line) => Number(line?.qty) <= 0 || !Number.isFinite(Number(line?.qty)))) {
+    return res.status(400).json({ error: "Quantity must be greater than 0" });
   }
 
   let effectiveSupplierId = Number(supplier_id || 0);
@@ -486,21 +568,20 @@ app.get("/api/formulas/:particularId", requireAuth, (req, res) => {
 
 app.post("/api/formulas/:particularId", requireAuth, (req, res) => {
   const particularId = Number(req.params.particularId);
-  const { code = "", batch_size = 1, total_cost = 0, remarks = "", lines = [] } = req.body || {};
+  const { code = "", batch_size = 1, remarks = "", lines = [] } = req.body || {};
 
   let formula = db.prepare("SELECT * FROM formulas WHERE particular_id = ?").get(particularId);
   if (formula) {
-    db.prepare("UPDATE formulas SET code = ?, batch_size = ?, total_cost = ?, remarks = ?, updated_at = datetime('now') WHERE id = ?").run(
+    db.prepare("UPDATE formulas SET code = ?, batch_size = ?, remarks = ?, updated_at = datetime('now') WHERE id = ?").run(
       String(code || ""),
       Number(batch_size || 1),
-      Number(total_cost || 0),
       String(remarks || ""),
       formula.id,
     );
   } else {
     const insert = db
       .prepare("INSERT INTO formulas (particular_id, code, batch_size, total_cost, remarks, updated_at) VALUES (?, ?, ?, ?, ?, datetime('now'))")
-      .run(particularId, String(code || ""), Number(batch_size || 1), Number(total_cost || 0), String(remarks || ""));
+      .run(particularId, String(code || ""), Number(batch_size || 1), 0, String(remarks || ""));
 
     formula = db.prepare("SELECT * FROM formulas WHERE id = ?").get(insert.lastInsertRowid);
   }
@@ -525,6 +606,9 @@ app.post("/api/formulas/:particularId", requireAuth, (req, res) => {
       index + 1,
     );
   });
+
+  const totals = db.prepare("SELECT COALESCE(SUM(value), 0) AS total_value, COALESCE(SUM(cost_value), 0) AS total_cost FROM formula_lines WHERE formula_id = ?").get(formula.id);
+  db.prepare("UPDATE formulas SET total_cost = ? WHERE id = ?").run(Number(totals.total_cost), formula.id);
 
   const fresh = db.prepare("SELECT * FROM formulas WHERE id = ?").get(formula.id);
   const storedLines = db.prepare("SELECT * FROM formula_lines WHERE formula_id = ? ORDER BY sort_order ASC, id ASC").all(formula.id);
