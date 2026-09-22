@@ -1,13 +1,18 @@
+function finiteNumber(value, fallback = 0) {
+  const number = Number(value ?? fallback);
+  return Number.isFinite(number) ? number : fallback;
+}
+
 export function calculateProductionRequirements(formulaLines, batchQty, batchSize = 1) {
-  const size = Number(batchSize || 1);
-  const batch = Number(batchQty || 0);
+  const size = finiteNumber(batchSize, 1);
+  const batch = finiteNumber(batchQty, 0);
   const multiplier = size > 0 ? batch / size : 0;
 
   const lines = (formulaLines || []).map((line) => {
-    const value = Number(line?.value ?? 0);
-    const rate = Number(line?.rate ?? 0);
-    const qtyRequired = value * multiplier;
-    const amount = qtyRequired * rate;
+    const value = finiteNumber(line?.value, 0);
+    const rate = finiteNumber(line?.rate, 0);
+    const qtyRequired = Number.isFinite(value) && Number.isFinite(multiplier) ? value * multiplier : 0;
+    const amount = Number.isFinite(qtyRequired) && Number.isFinite(rate) ? qtyRequired * rate : 0;
 
     return {
       ...line,
@@ -17,11 +22,14 @@ export function calculateProductionRequirements(formulaLines, batchQty, batchSiz
     };
   });
 
-  const totalMaterialCost = lines.reduce((sum, line) => sum + Number(line.amount || 0), 0);
+  const totalMaterialCost = lines.reduce((sum, line) => {
+    const amount = finiteNumber(line.amount, 0);
+    return sum + amount;
+  }, 0);
 
   return {
-    batchMultiplier: multiplier,
-    totalMaterialCost,
+    batchMultiplier: Number.isFinite(multiplier) ? multiplier : 0,
+    totalMaterialCost: Number.isFinite(totalMaterialCost) ? totalMaterialCost : 0,
     lines,
   };
 }

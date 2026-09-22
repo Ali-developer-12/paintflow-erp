@@ -79,6 +79,32 @@ Actual: each `formula_lines.cost_value` is correct (20 and 40), but `formulas.to
 
 Likely responsible: `server/src/index.js`, `POST /api/formulas/:particularId`, which persists request `total_cost` instead of deriving it from stored lines.
 
+## Phase 8 Polish QA — 2026-09-18
+
+Method: authenticated HTTP regression probes were run against the real local API. Browser-based checks could not be executed because the required Playwright Chromium executable was not installed in the environment; no visual result is inferred from source inspection.
+
+| Test | Area | Result | Evidence / notes |
+| --- | --- | --- | --- |
+| 1 | Backend-off error handling on Items, Formula/BOM, Purchase, Production, Stock | BLOCKED | Browser automation unavailable; the UI could not be opened to stop/restart the backend and trigger actions. |
+| 2 | Recovery after backend restart | BLOCKED | Browser automation unavailable. |
+| 3 | Invalid Items and Formula/BOM saves | BLOCKED | Browser automation unavailable; direct API validation was not substituted for the requested UI interaction. |
+| 4 | Slow-network loading indicators | BLOCKED | Browser automation unavailable; throttled reloads could not be performed. |
+| 5 | Items empty state for zero particulars | BLOCKED | Browser automation unavailable. |
+| 6 | Formula/BOM unassigned-particular state | BLOCKED | Browser automation unavailable. |
+| 7 | Purchase and production regression | FAIL | Valid purchase of 1 KG Solvent at 75 returned success and raised stock 127 -> 128 KG. A valid 1-unit production request for formula particular 5 returned HTTP 500; finished stock remained 10 KG and raw stock remained 128 KG. |
+| 8 | F-01 and S-01 invariants | PASS | Zero-quantity purchase returned HTTP 400. Formula detail reported header total 60 with line costs 20 and 40. |
+| 9 | Responsive layout at approximately 768px | BLOCKED | Browser automation unavailable; no viewport resize or visual inspection was possible. |
+
+### Phase 8 failure — valid production request returns HTTP 500 — FIXED
+
+Verification (2026-09-21): the production calculation now guards finite decimal values, keeps the math in the shared helper, and writes REAL-valued stock/ledger amounts without converting them to integers. Re-running the exact repro at formula particular 5 with `{"particular_id":5,"batch_quantity":1,"remarks":"Phase 8 QA"}` returned HTTP 201. The production consumed 0.4 KG of Solvent total (0.2 + 0.2) and raised finished stock from 10 KG to 11 KG.
+
+Before fix (2026-09-18): raw stock stayed at 128 KG and finished stock stayed at 10 KG after the same request; the server responded with HTTP 500.
+
+After fix (2026-09-21): raw stock is 127.6 KG and finished stock is 11 KG for the same formula, which matches the 0.4 KG consumption and +1 KG finished production. The fractional stock/ledger writes remain precise and the insufficient-stock guard continues to reject over-consumption.
+
+Overall verdict: Phase 8 polish is fixed for the fractional production regression; the browser QA suite remains environment-blocked, but the backend regression has been reproduced, corrected, and verified with real HTTP requests.
+
 ## Confidence assessment
 
 Phase 2 item CRUD and formula-line persistence are suitable for further user testing: validation, persistence, edit, and delete paths worked. The formula header total should not yet be relied upon for reporting until S-01 is clarified.
