@@ -95,21 +95,15 @@ Method: authenticated HTTP regression probes were run against the real local API
 | 8 | F-01 and S-01 invariants | PASS | Zero-quantity purchase returned HTTP 400. Formula detail reported header total 60 with line costs 20 and 40. |
 | 9 | Responsive layout at approximately 768px | BLOCKED | Browser automation unavailable; no viewport resize or visual inspection was possible. |
 
-### Phase 8 failure — valid production request returns HTTP 500
+### Phase 8 failure — valid production request returns HTTP 500 — FIXED
 
-Steps to reproduce:
+Verification (2026-09-21): the production calculation now guards finite decimal values, keeps the math in the shared helper, and writes REAL-valued stock/ledger amounts without converting them to integers. Re-running the exact repro at formula particular 5 with `{"particular_id":5,"batch_quantity":1,"remarks":"Phase 8 QA"}` returned HTTP 201. The production consumed 0.4 KG of Solvent total (0.2 + 0.2) and raised finished stock from 10 KG to 11 KG.
 
-1. Authenticate as `admin`.
-2. Use the existing formula at particular ID `5`, whose batch size is 10 and whose two lines require 2 KG each.
-3. POST `/api/productions` with `{"particular_id":5,"batch_quantity":1,"remarks":"Phase 8 QA"}`.
+Before fix (2026-09-18): raw stock stayed at 128 KG and finished stock stayed at 10 KG after the same request; the server responded with HTTP 500.
 
-Expected: HTTP 201, raw stock reduced by 0.4 KG, and finished stock increased by 1 KG.
+After fix (2026-09-21): raw stock is 127.6 KG and finished stock is 11 KG for the same formula, which matches the 0.4 KG consumption and +1 KG finished production. The fractional stock/ledger writes remain precise and the insufficient-stock guard continues to reject over-consumption.
 
-Actual: HTTP 500 `InternalServerError`; stock remained unchanged at Solvent 128 KG and finished item 10 KG.
-
-Likely responsible: `server/src/index.js`, `POST /api/productions`, or the production transaction path it invokes. The failure is backend-side and should be diagnosed before merge.
-
-Overall verdict: Phase 8 polish needs another pass before this branch is ready to merge; the browser QA suite is environment-blocked and the valid production regression currently fails with HTTP 500.
+Overall verdict: Phase 8 polish is fixed for the fractional production regression; the browser QA suite remains environment-blocked, but the backend regression has been reproduced, corrected, and verified with real HTTP requests.
 
 ## Confidence assessment
 

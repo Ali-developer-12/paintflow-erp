@@ -277,7 +277,7 @@ app.post("/api/productions", requireAuth, (req, res) => {
   const particularId = Number(particular_id || 0);
   const producedQty = Number(batch_quantity || 0);
 
-  if (!particularId || producedQty <= 0) {
+  if (!particularId || !Number.isFinite(producedQty) || producedQty <= 0) {
     return res.status(400).json({ error: "Please select a valid item and batch quantity" });
   }
 
@@ -294,11 +294,17 @@ app.post("/api/productions", requireAuth, (req, res) => {
     return res.status(400).json({ error: "This formula has no material lines yet." });
   }
 
-  const calculation = calculateProductionRequirements(formulaLines, producedQty, Number(formula.batch_size || 1));
+  const batchSize = Number.isFinite(Number(formula.batch_size)) ? Number(formula.batch_size) : 1;
+  const calculation = calculateProductionRequirements(formulaLines, producedQty, batchSize);
 
   for (const line of calculation.lines) {
     if (!line.factory_item_id) {
       return res.status(400).json({ error: `Material ${line.material_name || "unknown"} is missing a raw material reference.` });
+    }
+
+    const qtyRequired = Number(line.qtyRequired || 0);
+    if (!Number.isFinite(qtyRequired) || qtyRequired < 0) {
+      return res.status(400).json({ error: `Invalid material quantity for ${line.material_name || "unknown"}.` });
     }
 
     const item = db.prepare("SELECT id, name, stock_qty FROM factory_items WHERE id = ?").get(Number(line.factory_item_id));
@@ -306,9 +312,9 @@ app.post("/api/productions", requireAuth, (req, res) => {
       return res.status(400).json({ error: `Raw material not found: ${line.material_name || "unknown"}` });
     }
 
-    if (Number(item.stock_qty || 0) < Number(line.qtyRequired || 0)) {
+    if (Number(item.stock_qty || 0) < qtyRequired) {
       return res.status(400).json({
-        error: `Insufficient stock for ${item.name}. Available ${Number(item.stock_qty || 0)}, required ${Number(line.qtyRequired || 0)}.`,
+        error: `Insufficient stock for ${item.name}. Available ${Number(item.stock_qty || 0)}, required ${qtyRequired}.`,
       });
     }
   }
@@ -316,12 +322,14 @@ app.post("/api/productions", requireAuth, (req, res) => {
   const productionVoucherNo = `PRO-${Date.now()}`;
   const particular = db.prepare("SELECT * FROM item_particulars WHERE id = ?").get(particularId);
   const currentStock = Number(particular?.stock_qty || 0);
+  const safeBatchMultiplier = Number.isFinite(Number(calculation.batchMultiplier)) ? Number(calculation.batchMultiplier) : 0;
+  const safeTotalMaterialCost = Number.isFinite(Number(calculation.totalMaterialCost)) ? Number(calculation.totalMaterialCost) : 0;
 
   const productionInsert = db
     .prepare(
       "INSERT INTO productions (voucher_no, date, particular_id, batches, produced_qty, material_cost, overhead_cost, total_cost, remarks, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, NULL, datetime('now'))",
     )
-    .run(productionVoucherNo, String(date), particularId, Number(calculation.batchMultiplier || 0), producedQty, Number(calculation.totalMaterialCost || 0), Number(calculation.totalMaterialCost || 0), String(remarks || ""));
+    .run(productionVoucherNo, String(date), particularId, safeBatchMultiplier, producedQty, safeTotalMaterialCost, safeTotalMaterialCost, String(remarks || ""));
 
   const productionId = Number(productionInsert.lastInsertRowid);
   const consumptionInsert = db.prepare(
@@ -330,9 +338,9 @@ app.post("/api/productions", requireAuth, (req, res) => {
 
   for (const line of calculation.lines) {
     const factoryItemId = Number(line.factory_item_id || 0);
-    const qtyRequired = Number(line.qtyRequired || 0);
-    const rate = Number(line.rate || 0);
-    const amount = Number(line.amount || 0);
+    const qtyRequired = Number.isFinite(Number(line.qtyRequired)) ? Number(line.qtyRequired) : 0;
+    const rate = Number.isFinite(Number(line.rate)) ? Number(line.rate) : 0;
+    const amount = Number.isFinite(Number(line.amount)) ? Number(line.amount) : 0;
 
     db.prepare("UPDATE factory_items SET stock_qty = stock_qty - ? WHERE id = ?").run(qtyRequired, factoryItemId);
     db.prepare(
