@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import fs from "node:fs";
 import db, { applySchema, DB_PATH } from "./db.js";
 import { createSession, destroySession, hashPassword, requireAuth, verifyPassword } from "./auth.js";
 
@@ -58,6 +59,517 @@ app.get("/api/auth/me", requireAuth, (req, res) => res.json({ user: req.user }))
 app.get("/api/factory-items", requireAuth, (_req, res) => {
   const rows = db.prepare("SELECT * FROM factory_items WHERE is_active = 1 ORDER BY name ASC").all();
   res.json(rows);
+});
+
+app.get("/api/setup/employees", requireAuth, (_req, res) => {
+  const rows = db
+    .prepare("SELECT * FROM employees WHERE is_active = 1 ORDER BY name ASC")
+    .all();
+  res.json(rows);
+});
+
+app.post("/api/setup/employees", requireAuth, (req, res) => {
+  const { name, designation = "", phone = "", address = "", salary = 0 } = req.body || {};
+  if (!name || !String(name).trim()) {
+    return res.status(400).json({ error: "Employee name is required" });
+  }
+
+  const row = db
+    .prepare(
+      "INSERT INTO employees (code, name, designation, phone, address, salary, join_date, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?, date('now'), 1, datetime('now'))",
+    )
+    .run(`EMP-${Date.now()}`, String(name).trim(), String(designation || ""), String(phone || ""), String(address || ""), Number(salary || 0));
+
+  const result = db.prepare("SELECT * FROM employees WHERE id = ?").get(row.lastInsertRowid);
+  res.status(201).json(result);
+});
+
+app.put("/api/setup/employees/:id", requireAuth, (req, res) => {
+  const id = Number(req.params.id);
+  const { name, designation = "", phone = "", address = "", salary = 0 } = req.body || {};
+  if (!name || !String(name).trim()) return res.status(400).json({ error: "Employee name is required" });
+
+  db.prepare(
+    "UPDATE employees SET name = ?, designation = ?, phone = ?, address = ?, salary = ? WHERE id = ?",
+  ).run(String(name).trim(), String(designation || ""), String(phone || ""), String(address || ""), Number(salary || 0), id);
+
+  res.json(db.prepare("SELECT * FROM employees WHERE id = ?").get(id));
+});
+
+app.delete("/api/setup/employees/:id", requireAuth, (req, res) => {
+  db.prepare("UPDATE employees SET is_active = 0 WHERE id = ?").run(Number(req.params.id));
+  res.json({ ok: true });
+});
+
+app.get("/api/setup/customers", requireAuth, (_req, res) => {
+  const rows = db.prepare("SELECT * FROM customers WHERE is_active = 1 ORDER BY name ASC").all();
+  res.json(rows);
+});
+
+app.post("/api/setup/customers", requireAuth, (req, res) => {
+  const { name, phone = "", address = "", opening_balance = 0 } = req.body || {};
+  if (!name || !String(name).trim()) return res.status(400).json({ error: "Customer name is required" });
+
+  const row = db
+    .prepare(
+      "INSERT INTO customers (code, name, phone, address, opening_balance, credit_limit, is_active, created_at) VALUES (?, ?, ?, ?, ?, 0, 1, datetime('now'))",
+    )
+    .run(`CUST-${Date.now()}`, String(name).trim(), String(phone || ""), String(address || ""), Number(opening_balance || 0));
+
+  res.status(201).json(db.prepare("SELECT * FROM customers WHERE id = ?").get(row.lastInsertRowid));
+});
+
+app.put("/api/setup/customers/:id", requireAuth, (req, res) => {
+  const id = Number(req.params.id);
+  const { name, phone = "", address = "", opening_balance = 0 } = req.body || {};
+  if (!name || !String(name).trim()) return res.status(400).json({ error: "Customer name is required" });
+
+  db.prepare(
+    "UPDATE customers SET name = ?, phone = ?, address = ?, opening_balance = ? WHERE id = ?",
+  ).run(String(name).trim(), String(phone || ""), String(address || ""), Number(opening_balance || 0), id);
+
+  res.json(db.prepare("SELECT * FROM customers WHERE id = ?").get(id));
+});
+
+app.delete("/api/setup/customers/:id", requireAuth, (req, res) => {
+  db.prepare("UPDATE customers SET is_active = 0 WHERE id = ?").run(Number(req.params.id));
+  res.json({ ok: true });
+});
+
+app.get("/api/setup/suppliers", requireAuth, (_req, res) => {
+  const rows = db.prepare("SELECT * FROM suppliers WHERE is_active = 1 ORDER BY name ASC").all();
+  res.json(rows);
+});
+
+app.post("/api/setup/suppliers", requireAuth, (req, res) => {
+  const { name, phone = "", address = "", opening_balance = 0 } = req.body || {};
+  if (!name || !String(name).trim()) return res.status(400).json({ error: "Supplier name is required" });
+
+  const row = db
+    .prepare(
+      "INSERT INTO suppliers (code, name, phone, address, opening_balance, account_id, is_active, created_at) VALUES (?, ?, ?, ?, ?, NULL, 1, datetime('now'))",
+    )
+    .run(`SUP-${Date.now()}`, String(name).trim(), String(phone || ""), String(address || ""), Number(opening_balance || 0));
+
+  res.status(201).json(db.prepare("SELECT * FROM suppliers WHERE id = ?").get(row.lastInsertRowid));
+});
+
+app.put("/api/setup/suppliers/:id", requireAuth, (req, res) => {
+  const id = Number(req.params.id);
+  const { name, phone = "", address = "", opening_balance = 0 } = req.body || {};
+  if (!name || !String(name).trim()) return res.status(400).json({ error: "Supplier name is required" });
+
+  db.prepare(
+    "UPDATE suppliers SET name = ?, phone = ?, address = ?, opening_balance = ? WHERE id = ?",
+  ).run(String(name).trim(), String(phone || ""), String(address || ""), Number(opening_balance || 0), id);
+
+  res.json(db.prepare("SELECT * FROM suppliers WHERE id = ?").get(id));
+});
+
+app.delete("/api/setup/suppliers/:id", requireAuth, (req, res) => {
+  db.prepare("UPDATE suppliers SET is_active = 0 WHERE id = ?").run(Number(req.params.id));
+  res.json({ ok: true });
+});
+
+app.get("/api/setup/transporters", requireAuth, (_req, res) => {
+  const rows = db.prepare("SELECT * FROM transporters WHERE is_active = 1 ORDER BY name ASC").all();
+  res.json(rows);
+});
+
+app.post("/api/setup/transporters", requireAuth, (req, res) => {
+  const { name, phone = "", vehicle_no = "", address = "" } = req.body || {};
+  if (!name || !String(name).trim()) return res.status(400).json({ error: "Transporter name is required" });
+
+  const row = db
+    .prepare(
+      "INSERT INTO transporters (code, name, phone, vehicle_no, address, is_active, created_at) VALUES (?, ?, ?, ?, ?, 1, datetime('now'))",
+    )
+    .run(`TR-${Date.now()}`, String(name).trim(), String(phone || ""), String(vehicle_no || ""), String(address || ""));
+
+  res.status(201).json(db.prepare("SELECT * FROM transporters WHERE id = ?").get(row.lastInsertRowid));
+});
+
+app.put("/api/setup/transporters/:id", requireAuth, (req, res) => {
+  const id = Number(req.params.id);
+  const { name, phone = "", vehicle_no = "", address = "" } = req.body || {};
+  if (!name || !String(name).trim()) return res.status(400).json({ error: "Transporter name is required" });
+
+  db.prepare(
+    "UPDATE transporters SET name = ?, phone = ?, vehicle_no = ?, address = ? WHERE id = ?",
+  ).run(String(name).trim(), String(phone || ""), String(vehicle_no || ""), String(address || ""), id);
+
+  res.json(db.prepare("SELECT * FROM transporters WHERE id = ?").get(id));
+});
+
+app.delete("/api/setup/transporters/:id", requireAuth, (req, res) => {
+  db.prepare("UPDATE transporters SET is_active = 0 WHERE id = ?").run(Number(req.params.id));
+  res.json({ ok: true });
+});
+
+app.get("/api/setup/accounts", requireAuth, (_req, res) => {
+  const rows = db
+    .prepare(
+      "SELECT a.*, p.name AS parent_name FROM accounts a LEFT JOIN accounts p ON p.id = a.parent_id WHERE a.is_active = 1 ORDER BY a.code ASC",
+    )
+    .all();
+  res.json(rows);
+});
+
+app.post("/api/setup/accounts", requireAuth, (req, res) => {
+  const { code = "", name = "", type = "Asset", parent_id = null, opening_balance = 0 } = req.body || {};
+  if (!name || !String(name).trim()) return res.status(400).json({ error: "Account name is required" });
+
+  const row = db
+    .prepare(
+      "INSERT INTO accounts (code, name, type, parent_id, opening_balance, is_active, created_at) VALUES (?, ?, ?, ?, ?, 1, datetime('now'))",
+    )
+    .run(String(code || `ACC-${Date.now()}`), String(name).trim(), String(type || "Asset"), parent_id ? Number(parent_id) : null, Number(opening_balance || 0));
+
+  res.status(201).json(db.prepare("SELECT * FROM accounts WHERE id = ?").get(row.lastInsertRowid));
+});
+
+app.put("/api/setup/accounts/:id", requireAuth, (req, res) => {
+  const id = Number(req.params.id);
+  const { code = "", name = "", type = "Asset", parent_id = null, opening_balance = 0 } = req.body || {};
+  if (!name || !String(name).trim()) return res.status(400).json({ error: "Account name is required" });
+
+  db.prepare(
+    "UPDATE accounts SET code = ?, name = ?, type = ?, parent_id = ?, opening_balance = ? WHERE id = ?",
+  ).run(String(code || `ACC-${id}`), String(name).trim(), String(type || "Asset"), parent_id ? Number(parent_id) : null, Number(opening_balance || 0), id);
+
+  res.json(db.prepare("SELECT * FROM accounts WHERE id = ?").get(id));
+});
+
+app.delete("/api/setup/accounts/:id", requireAuth, (req, res) => {
+  db.prepare("UPDATE accounts SET is_active = 0 WHERE id = ?").run(Number(req.params.id));
+  res.json({ ok: true });
+});
+
+app.get("/api/setup/factory-items", requireAuth, (_req, res) => {
+  const rows = db.prepare("SELECT * FROM factory_items WHERE is_active = 1 ORDER BY name ASC").all();
+  res.json(rows);
+});
+
+app.post("/api/setup/factory-items", requireAuth, (req, res) => {
+  const { name, unit = "KG", rate = 0, stock = 0 } = req.body || {};
+  if (!name || !String(name).trim()) return res.status(400).json({ error: "Factory item name is required" });
+
+  const row = db
+    .prepare(
+      "INSERT INTO factory_items (code, name, unit, rate, stock_qty, min_qty, max_qty, is_active, created_at) VALUES (?, ?, ?, ?, ?, 0, 0, 1, datetime('now'))",
+    )
+    .run(`MAT-${Date.now()}`, String(name).trim(), String(unit || "KG"), Number(rate || 0), Number(stock || 0));
+
+  res.status(201).json(db.prepare("SELECT * FROM factory_items WHERE id = ?").get(row.lastInsertRowid));
+});
+
+app.put("/api/setup/factory-items/:id", requireAuth, (req, res) => {
+  const id = Number(req.params.id);
+  const { name, unit = "KG", rate = 0, stock = 0 } = req.body || {};
+  if (!name || !String(name).trim()) return res.status(400).json({ error: "Factory item name is required" });
+
+  db.prepare(
+    "UPDATE factory_items SET name = ?, unit = ?, rate = ?, stock_qty = ? WHERE id = ?",
+  ).run(String(name).trim(), String(unit || "KG"), Number(rate || 0), Number(stock || 0), id);
+
+  res.json(db.prepare("SELECT * FROM factory_items WHERE id = ?").get(id));
+});
+
+app.delete("/api/setup/factory-items/:id", requireAuth, (req, res) => {
+  db.prepare("UPDATE factory_items SET is_active = 0 WHERE id = ?").run(Number(req.params.id));
+  res.json({ ok: true });
+});
+
+app.get("/api/setup/financial-years", requireAuth, (_req, res) => {
+  const rows = db.prepare("SELECT * FROM financial_years ORDER BY start_date DESC").all();
+  res.json(rows);
+});
+
+app.post("/api/setup/new-year-posting", requireAuth, (req, res) => {
+  const yearLabel = req.body?.name || new Date().getFullYear();
+  const startDate = `${yearLabel}-01-01`;
+  const endDate = `${yearLabel}-12-31`;
+  const exists = db.prepare("SELECT * FROM financial_years WHERE name = ?").get(String(yearLabel));
+
+  if (exists) {
+    return res.status(400).json({ error: "Financial year already exists" });
+  }
+
+  db.prepare("UPDATE financial_years SET is_current = 0 WHERE is_current = 1").run();
+  const row = db
+    .prepare(
+      "INSERT INTO financial_years (name, start_date, end_date, is_closed, is_current, created_at) VALUES (?, ?, ?, 0, 1, datetime('now'))",
+    )
+    .run(String(yearLabel), startDate, endDate);
+
+  const inserted = db.prepare("SELECT * FROM financial_years WHERE id = ?").get(row.lastInsertRowid);
+  res.status(201).json(inserted);
+});
+
+app.get("/api/stock/particulars", requireAuth, (_req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT ip.*, i.name AS item_name, i.code AS item_code
+       FROM item_particulars ip
+       JOIN items i ON i.id = ip.item_id
+       WHERE i.is_active = 1
+       ORDER BY i.name ASC, ip.type ASC`,
+    )
+    .all();
+  res.json(rows);
+});
+
+app.get("/api/particulars", requireAuth, (_req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT ip.*, i.name AS item_name, i.code AS item_code
+       FROM item_particulars ip
+       JOIN items i ON i.id = ip.item_id
+       ORDER BY i.name ASC, ip.type ASC`,
+    )
+    .all();
+  res.json(rows);
+});
+
+app.get("/api/sales", requireAuth, (_req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT s.*, c.name AS customer_name, COALESCE(SUM(sl.amount),0) AS total_amount
+       FROM sales s
+       LEFT JOIN customers c ON c.id = s.customer_id
+       LEFT JOIN sale_lines sl ON sl.sale_id = s.id
+       GROUP BY s.id, c.name
+       ORDER BY s.date DESC, s.id DESC`,
+    )
+    .all();
+  res.json(rows);
+});
+
+app.post("/api/sales", requireAuth, (req, res) => {
+  const { customer_id, remarks = "", lines = [] } = req.body || {};
+  if (!customer_id) return res.status(400).json({ error: "Customer is required" });
+  if (!Array.isArray(lines) || lines.length === 0) return res.status(400).json({ error: "At least one sale line is required" });
+
+  let total = 0;
+  const lineData = [];
+  for (const line of lines) {
+    const particularId = Number(line.particular_id);
+    const qty = Number(line.qty || 0);
+    const rate = Number(line.rate || 0);
+    if (!particularId || qty <= 0 || rate < 0) {
+      return res.status(400).json({ error: "Invalid sale line data" });
+    }
+
+    const particular = db.prepare("SELECT * FROM item_particulars WHERE id = ?").get(particularId);
+    if (!particular) return res.status(400).json({ error: "Invalid item line" });
+    if (qty > Number(particular.stock_qty || 0)) {
+      return res.status(400).json({ error: `Insufficient stock for ${particularId}` });
+    }
+
+    const amount = qty * rate;
+    total += amount;
+    lineData.push({ particularId, qty, rate, amount, description: String(line.description || "") });
+  }
+
+  const voucherNo = `SL-${Date.now()}`;
+  const sale = db
+    .prepare(
+      "INSERT INTO sales (voucher_no, date, customer_id, sale_type, remarks, sub_total, discount, tax, net_total, paid_amount, created_by, created_at) VALUES (?, date('now'), ?, 'counter', ?, ?, 0, 0, ?, 0, ?, datetime('now'))",
+    )
+    .run(voucherNo, Number(customer_id), String(remarks || ""), total, total, req.user?.id ?? null);
+
+  const insertLine = db.prepare(
+    "INSERT INTO sale_lines (sale_id, particular_id, description, qty, rate, amount) VALUES (?, ?, ?, ?, ?, ?)",
+  );
+
+  for (const line of lineData) {
+    db.prepare("UPDATE item_particulars SET stock_qty = stock_qty - ? WHERE id = ?").run(line.qty, line.particularId);
+    db.prepare("INSERT INTO stock_ledger (date, stock_type, particular_id, ref_type, ref_id, ref_no, qty_out, rate, balance_after, remarks) VALUES (?, 'finished', ?, 'sale', ?, ?, ?, ?, (SELECT stock_qty FROM item_particulars WHERE id = ?), ?)")
+      .run(
+        new Date().toISOString().slice(0, 10),
+        line.particularId,
+        sale.lastInsertRowid,
+        voucherNo,
+        line.qty,
+        line.rate,
+        line.particularId,
+        String(remarks || "Sale"),
+      );
+    insertLine.run(sale.lastInsertRowid, line.particularId, line.description, line.qty, line.rate, line.amount);
+  }
+
+  res.status(201).json({ id: sale.lastInsertRowid, voucher_no: voucherNo, total });
+});
+
+app.get("/api/issue-vouchers", requireAuth, (_req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT iv.*, c.name AS customer_name, COUNT(ivl.id) AS line_count
+       FROM issue_vouchers iv
+       LEFT JOIN customers c ON c.id = iv.customer_id
+       LEFT JOIN issue_voucher_lines ivl ON ivl.voucher_id = iv.id
+       GROUP BY iv.id, c.name
+       ORDER BY iv.date DESC, iv.id DESC`,
+    )
+    .all();
+  res.json(rows);
+});
+
+app.post("/api/issue-vouchers", requireAuth, (req, res) => {
+  const { voucher_no, date, customer_id, remarks = "", lines = [] } = req.body || {};
+  if (!customer_id) return res.status(400).json({ error: "Customer is required" });
+  if (!Array.isArray(lines) || lines.length === 0) return res.status(400).json({ error: "At least one issue line is required" });
+
+  const voucherNo = String(voucher_no || `IV-${Date.now()}`);
+  const issue = db
+    .prepare(
+      "INSERT INTO issue_vouchers (voucher_no, date, customer_id, transporter_id, remarks, created_by, created_at) VALUES (?, ?, ?, NULL, ?, ?, datetime('now'))",
+    )
+    .run(voucherNo, String(date || new Date().toISOString().slice(0, 10)), Number(customer_id), String(remarks || ""), req.user?.id ?? null);
+
+  const insertLine = db.prepare(
+    "INSERT INTO issue_voucher_lines (voucher_id, particular_id, size, shade, in_stock, qty) VALUES (?, ?, ?, ?, ?, ?)",
+  );
+
+  for (const line of lines) {
+    const particularId = Number(line.particular_id);
+    const qty = Number(line.qty || 0);
+    const particular = db.prepare("SELECT * FROM item_particulars WHERE id = ?").get(particularId);
+    if (!particular) return res.status(400).json({ error: "Invalid issue item" });
+    if (qty > Number(particular.stock_qty || 0)) return res.status(400).json({ error: `Insufficient stock for ${line.size || particularId}` });
+
+    db.prepare("UPDATE item_particulars SET stock_qty = stock_qty - ? WHERE id = ?").run(qty, particularId);
+    insertLine.run(issue.lastInsertRowid, particularId, String(line.size || particular.type || ""), String(line.shade || particular.weight_unit || ""), Number(particular.stock_qty || 0), qty);
+    db.prepare("INSERT INTO stock_ledger (date, stock_type, particular_id, ref_type, ref_id, ref_no, qty_out, rate, balance_after, remarks) VALUES (?, 'finished', ?, 'issue', ?, ?, ?, 0, 0, (SELECT stock_qty FROM item_particulars WHERE id = ?), ?)")
+      .run(new Date().toISOString().slice(0, 10), particularId, issue.lastInsertRowid, voucherNo, qty, particularId, String(remarks || "Issue voucher"));
+  }
+
+  res.status(201).json({ id: issue.lastInsertRowid, voucher_no: voucherNo });
+});
+
+app.get("/api/returns", requireAuth, (_req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT r.*, c.name AS customer_name, s.name AS supplier_name
+       FROM returns r
+       LEFT JOIN customers c ON c.id = r.customer_id
+       LEFT JOIN suppliers s ON s.id = r.supplier_id
+       ORDER BY r.date DESC, r.id DESC`,
+    )
+    .all();
+  res.json(rows);
+});
+
+app.post("/api/returns", requireAuth, (req, res) => {
+  const { return_type = "customer", customer_id = null, supplier_id = null, remarks = "", lines = [] } = req.body || {};
+  if (!Array.isArray(lines) || lines.length === 0) return res.status(400).json({ error: "At least one return line is required" });
+  if (return_type === "customer" && !customer_id) return res.status(400).json({ error: "Customer is required" });
+  if (return_type === "supplier" && !supplier_id) return res.status(400).json({ error: "Supplier is required" });
+
+  const voucherNo = `RT-${Date.now()}`;
+  const returnRow = db
+    .prepare(
+      "INSERT INTO returns (voucher_no, date, return_type, customer_id, supplier_id, remarks, net_total, created_by, created_at) VALUES (?, date('now'), ?, ?, ?, ?, 0, ?, datetime('now'))",
+    )
+    .run(voucherNo, String(return_type), return_type === "customer" ? Number(customer_id) : null, return_type === "supplier" ? Number(supplier_id) : null, String(remarks || ""), req.user?.id ?? null);
+
+  let total = 0;
+  const insertLine = db.prepare(
+    "INSERT INTO return_lines (return_id, particular_id, factory_item_id, description, qty, rate, amount) VALUES (?, ?, NULL, ?, ?, ?, ?)",
+  );
+
+  for (const line of lines) {
+    const particularId = Number(line.particular_id);
+    const qty = Number(line.qty || 0);
+    const rate = Number(line.rate || 0);
+    const amount = qty * rate;
+    total += amount;
+    if (!particularId || qty <= 0) return res.status(400).json({ error: "Invalid return line" });
+
+    if (return_type === "customer") {
+      db.prepare("UPDATE item_particulars SET stock_qty = stock_qty + ? WHERE id = ?").run(qty, particularId);
+    } else {
+      db.prepare("UPDATE item_particulars SET stock_qty = stock_qty - ? WHERE id = ?").run(qty, particularId);
+    }
+
+    insertLine.run(returnRow.lastInsertRowid, particularId, String(line.description || ""), qty, rate, amount);
+  }
+
+  db.prepare("UPDATE returns SET net_total = ? WHERE id = ?").run(total, returnRow.lastInsertRowid);
+  res.status(201).json({ id: returnRow.lastInsertRowid, voucher_no: voucherNo, total });
+});
+
+app.get("/api/reports/sales", requireAuth, (req, res) => {
+  const from = req.query.from ? String(req.query.from) : "";
+  const to = req.query.to ? String(req.query.to) : "";
+  const party = req.query.party ? Number(req.query.party) : null;
+  const item = req.query.item ? Number(req.query.item) : null;
+
+  let sql = `SELECT s.id, s.voucher_no, s.date, c.name AS party_name, SUM(sl.amount) AS total_amount
+             FROM sales s
+             LEFT JOIN customers c ON c.id = s.customer_id
+             LEFT JOIN sale_lines sl ON sl.sale_id = s.id
+             WHERE 1 = 1`;
+  const params = [];
+
+  if (from) { sql += " AND s.date >= ?"; params.push(from); }
+  if (to) { sql += " AND s.date <= ?"; params.push(to); }
+  if (party) { sql += " AND s.customer_id = ?"; params.push(party); }
+  if (item) { sql += " AND sl.particular_id = ?"; params.push(item); }
+
+  sql += " GROUP BY s.id, c.name ORDER BY s.date DESC";
+  res.json(db.prepare(sql).all(...params));
+});
+
+app.get("/api/reports/purchases", requireAuth, (req, res) => {
+  const from = req.query.from ? String(req.query.from) : "";
+  const to = req.query.to ? String(req.query.to) : "";
+  const party = req.query.party ? Number(req.query.party) : null;
+  const item = req.query.item ? Number(req.query.item) : null;
+
+  let sql = `SELECT p.id, p.voucher_no, p.date, s.name AS party_name, SUM(pl.amount) AS total_amount
+             FROM purchases p
+             LEFT JOIN suppliers s ON s.id = p.supplier_id
+             LEFT JOIN purchase_lines pl ON pl.purchase_id = p.id
+             WHERE 1 = 1`;
+  const params = [];
+
+  if (from) { sql += " AND p.date >= ?"; params.push(from); }
+  if (to) { sql += " AND p.date <= ?"; params.push(to); }
+  if (party) { sql += " AND p.supplier_id = ?"; params.push(party); }
+  if (item) { sql += " AND pl.particular_id = ?"; params.push(item); }
+
+  sql += " GROUP BY p.id, s.name ORDER BY p.date DESC";
+  res.json(db.prepare(sql).all(...params));
+});
+
+app.get("/api/reports/general", requireAuth, (req, res) => {
+  const from = req.query.from ? String(req.query.from) : "";
+  const to = req.query.to ? String(req.query.to) : "";
+  const item = req.query.item ? Number(req.query.item) : null;
+
+  let sql = `SELECT sl.id, sl.date, sl.ref_type, sl.ref_no, sl.qty_in, sl.qty_out, sl.balance_after, ip.id AS particular_id, i.name AS item_name
+             FROM stock_ledger sl
+             LEFT JOIN item_particulars ip ON ip.id = sl.particular_id
+             LEFT JOIN items i ON i.id = ip.item_id
+             WHERE 1 = 1`;
+  const params = [];
+
+  if (from) { sql += " AND sl.date >= ?"; params.push(from); }
+  if (to) { sql += " AND sl.date <= ?"; params.push(to); }
+  if (item) { sql += " AND sl.particular_id = ?"; params.push(item); }
+
+  sql += " ORDER BY sl.date DESC, sl.id DESC";
+  res.json(db.prepare(sql).all(...params));
+});
+
+app.get("/api/backup/export", requireAuth, (_req, res) => {
+  const fileName = `paint-erp-backup-${new Date().toISOString().slice(0, 10)}.db`;
+  const buffer = fs.readFileSync(DB_PATH);
+  res.setHeader("Content-Type", "application/octet-stream");
+  res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+  res.setHeader("Content-Length", String(buffer.length));
+  res.send(buffer);
 });
 
 // ---------- Phase 2: Items & Formula/BOM ----------

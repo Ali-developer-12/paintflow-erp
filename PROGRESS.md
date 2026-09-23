@@ -8,6 +8,14 @@ Formula/BOM route repair note: the sidebar route target `/app/formula` previousl
 
 Phase 1 is complete for the requested handoff. The backend in `server/` provides an Express API backed by a SQLite database, and the frontend uses the existing design system and shared app shell. All sidebar placeholder routes relevant to Phase 1 now render safely inside the current app layout without crashing.
 
+## Progress — [Your Name] (Phases 3, 5, 7)
+
+This section is intentionally scoped only to Phase 3 (Setup / Masters), Phase 5 (Sales & Vouchers), and Phase 7 (Reports & Backup). No files or work related to the teammate's assigned phases were changed, and no edits were made outside this scope.
+
+- Phase 3: Setup / Masters — planned and scoped to employees, customers, suppliers, transporters, account chart, factory items, and new-year posting screens and supporting CRUD APIs only.
+- Phase 5: Sales & Vouchers — planned and scoped to counter sale, issue voucher, and returns screens and their supporting transaction logic only.
+- Phase 7: Reports & Backup — planned and scoped to sale, purchase, general report views and database export/backup actions only.
+
 ## Architecture Summary
 
 - Backend: Express API and local SQLite database in `server/`
