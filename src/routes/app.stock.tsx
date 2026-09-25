@@ -1,16 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { ModulePlaceholder } from "@/components/module-placeholder";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Boxes } from "lucide-react";
+import { apiGet } from "@/lib/api";
 
-export const Route = createFileRoute("/app/stock")({
-  component: StockPage,
-});
+type StockItem = { id: number; name: string; unit: string; stock_qty: number; min_qty: number; max_qty: number; stock_type: "raw" | "finished" };
+type LedgerRow = { id: number; date: string; item_name: string; unit: string; ref_type: string; ref_no: string; qty_in: number; qty_out: number; balance_after: number };
+export const Route = createFileRoute("/app/stock")({ component: StockPage });
+const quantity = (value: number) => Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
 
 function StockPage() {
-  return (
-    <ModulePlaceholder
-      title="Stock"
-      phase="Phase 6"
-      description="Stock and material movement ledger workflows will be added in Phase 6."
-    />
-  );
+  const [items, setItems] = useState<StockItem[]>([]); const [ledger, setLedger] = useState<LedgerRow[]>([]); const [itemId, setItemId] = useState(""); const [stockType, setStockType] = useState(""); const [from, setFrom] = useState(""); const [to, setTo] = useState(""); const [error, setError] = useState("Loading stock data...");
+  const query = useMemo(() => new URLSearchParams(Object.entries({ item_id: itemId, stock_type: stockType, from, to }).filter(([, v]) => v)).toString(), [itemId, stockType, from, to]);
+  useEffect(() => { void apiGet<StockItem[]>("/stock/summary").then((rows) => { setItems(rows); setError(""); }).catch((err) => setError(err instanceof Error ? err.message : "Unable to load stock summary")); }, []);
+  useEffect(() => { void apiGet<LedgerRow[]>(`/stock/ledger${query ? `?${query}` : ""}`).then((rows) => { setLedger(rows); setError(""); }).catch((err) => setError(err instanceof Error ? err.message : "Unable to load stock ledger")); }, [query]);
+  return <div className="flex min-h-[calc(100vh-120px)] flex-col gap-4 p-4"><div><h1 className="text-2xl font-semibold tracking-tight">Stock</h1><p className="text-sm text-muted-foreground">Live quantities and complete material movement history</p></div>{error && <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>}<section className="rounded-md border border-border bg-card p-4"><h2 className="mb-3 text-base font-semibold">Current stock</h2>{items.length === 0 ? <Empty text="No stock items are available yet." /> : <div className="overflow-x-auto"><table className="min-w-full text-sm"><thead className="bg-muted/40 text-left"><tr><th className="px-3 py-2">Particular / material</th><th className="px-3 py-2">Type</th><th className="px-3 py-2">Current stock</th><th className="px-3 py-2">Min</th><th className="px-3 py-2">Max</th></tr></thead><tbody>{items.map((item) => { const low = Number(item.min_qty) > 0 && Number(item.stock_qty) < Number(item.min_qty); const high = Number(item.max_qty) > 0 && Number(item.stock_qty) > Number(item.max_qty); return <tr key={`${item.stock_type}-${item.id}`} className={`border-t border-border ${low ? "bg-destructive/10" : high ? "bg-amber-500/10" : ""}`}><td className="px-3 py-2 font-medium">{item.name}</td><td className="px-3 py-2 capitalize">{item.stock_type}</td><td className="px-3 py-2 tabular-nums">{quantity(item.stock_qty)} {item.unit}</td><td className="px-3 py-2">{quantity(item.min_qty)}</td><td className="px-3 py-2">{quantity(item.max_qty)}</td></tr>; })}</tbody></table></div>}</section><section className="rounded-md border border-border bg-card p-4"><div className="mb-3 flex flex-wrap items-end gap-3"><Select label="Item" value={itemId} onChange={setItemId}><option value="">All items</option>{items.map((item) => <option key={`${item.stock_type}-${item.id}`} value={item.id}>{item.name} ({item.stock_type})</option>)}</Select><Select label="Type" value={stockType} onChange={setStockType}><option value="">All</option><option value="raw">Raw</option><option value="finished">Finished</option></Select><Date label="From" value={from} onChange={setFrom} /><Date label="To" value={to} onChange={setTo} /></div><h2 className="mb-3 text-base font-semibold">Stock ledger</h2>{ledger.length === 0 ? <Empty text="No movements match these filters." /> : <div className="overflow-x-auto"><table className="min-w-full text-sm"><thead className="bg-muted/40 text-left"><tr><th className="px-3 py-2">Date</th><th className="px-3 py-2">Item</th><th className="px-3 py-2">Transaction</th><th className="px-3 py-2">Reference</th><th className="px-3 py-2">Qty in</th><th className="px-3 py-2">Qty out</th><th className="px-3 py-2">Balance</th></tr></thead><tbody>{ledger.map((row) => <tr className="border-t border-border" key={row.id}><td className="px-3 py-2">{row.date}</td><td className="px-3 py-2 font-medium">{row.item_name}</td><td className="px-3 py-2 capitalize">{row.ref_type}</td><td className="px-3 py-2">{row.ref_no}</td><td className="px-3 py-2">{quantity(row.qty_in)}</td><td className="px-3 py-2">{quantity(row.qty_out)}</td><td className="px-3 py-2 font-medium">{quantity(row.balance_after)} {row.unit}</td></tr>)}</tbody></table></div>}</section></div>;
 }
+function Select({ label, value, onChange, children }: { label: string; value: string; onChange: (value: string) => void; children: ReactNode }) { return <div><label className="mb-1 block text-sm font-medium">{label}</label><select className="rounded-md border border-border bg-background px-3 py-2 text-sm" value={value} onChange={(e) => onChange(e.target.value)}>{children}</select></div>; }
+function Date({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) { return <div><label className="mb-1 block text-sm font-medium">{label}</label><input className="rounded-md border border-border bg-background px-3 py-2 text-sm" type="date" value={value} onChange={(e) => onChange(e.target.value)} /></div>; }
+function Empty({ text }: { text: string }) { return <div className="flex flex-col items-center justify-center gap-2 rounded-md border border-dashed border-border p-8 text-sm text-muted-foreground"><Boxes className="h-6 w-6" />{text}</div>; }

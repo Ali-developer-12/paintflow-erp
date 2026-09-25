@@ -85,7 +85,14 @@ export async function api<T = unknown>(
   }
 
   const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
+  let data: { error?: string } | null = null;
+  if (text) {
+    try {
+      data = JSON.parse(text) as { error?: string };
+    } catch {
+      data = { error: text.slice(0, 200) };
+    }
+  }
 
   if (!res.ok) {
     throw new ApiError((data && data.error) || `Request failed (${res.status})`, res.status);

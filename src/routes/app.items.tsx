@@ -51,6 +51,7 @@ function ItemsPage() {
   const [particulars, setParticulars] = useState<Particular[]>([]);
   const [factoryItems, setFactoryItems] = useState<FactoryItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const [modalParticular, setModalParticular] = useState<Particular | null>(null);
 
   async function loadItems() {
@@ -83,6 +84,8 @@ function ItemsPage() {
       try {
         await loadItems();
         await loadFactoryItems();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Unable to load items");
       } finally {
         setLoading(false);
       }
@@ -145,6 +148,15 @@ function ItemsPage() {
     setParticulars((cur) => cur.filter((r) => r.id !== row.id));
   }
 
+  async function runAction(action: () => Promise<void>) {
+    setError("");
+    try {
+      await action();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "The requested action could not be completed");
+    }
+  }
+
   return (
     <div className="flex h-[calc(100vh-120px)] flex-col gap-4 p-4">
       <div className="flex items-center justify-between">
@@ -153,12 +165,14 @@ function ItemsPage() {
           <p className="text-sm text-muted-foreground">Items and Formula / BOM</p>
         </div>
         <div className="flex gap-2">
-          <button className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground" onClick={addItem}>
+          <button className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60" onClick={() => void runAction(addItem)} disabled={loading}>
             <Plus className="h-4 w-4" /> Add Item
           </button>
         </div>
       </div>
 
+      {error && <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>}
+      {loading && <div className="text-sm text-muted-foreground">Loading items...</div>}
       <section className="grid flex-1 grid-cols-[320px_minmax(620px,1fr)] gap-4 overflow-hidden rounded-md border border-border bg-card">
         <aside className="border-r border-border bg-card p-3">
           <div className="mb-2 flex items-center justify-between">
@@ -169,13 +183,13 @@ function ItemsPage() {
             {items.length === 0 && <div className="text-sm text-muted-foreground">No items</div>}
             {items.map((item) => (
               <div key={item.id} className={cn("mb-2 cursor-pointer rounded-md border p-3 transition", selectedItem?.id === item.id ? "border-teal-500 bg-teal-50/20" : "border-border hover:bg-accent")}
-                onClick={async () => { setSelectedItem(item); await loadParticulars(item.id); }}>
+                onClick={() => void runAction(async () => { setSelectedItem(item); await loadParticulars(item.id); })}>
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-sm font-semibold text-foreground">{item.name}</div>
                     <div className="text-[11px] text-muted-foreground">{item.code}</div>
                   </div>
-                  <button className="text-xs text-destructive" onClick={(e) => { e.stopPropagation(); void deleteItem(item); }}>Delete</button>
+                    <button className="text-xs text-destructive" onClick={(e) => { e.stopPropagation(); void runAction(() => deleteItem(item)); }}>Delete</button>
                 </div>
               </div>
             ))}
@@ -190,7 +204,7 @@ function ItemsPage() {
                   <div className="text-lg font-semibold">{selectedItem.name}</div>
                   <div className="text-xs text-muted-foreground">{selectedItem.code}</div>
                 </div>
-                <button className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-accent" onClick={addParticular}>
+                <button className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-accent" onClick={() => void runAction(addParticular)}>
                   <Plus className="h-4 w-4" /> Add Particular
                 </button>
               </div>
@@ -214,20 +228,21 @@ function ItemsPage() {
                   </tr>
                   </thead>
                   <tbody>
+                  {particulars.length === 0 && <tr><td colSpan={12} className="px-3 py-8 text-center text-sm text-muted-foreground">No particulars have been added for this item yet.</td></tr>}
                   {particulars.map((row, idx) => (
                     <tr key={row.id} className="border-t border-border">
                       <td className="px-3 py-2 text-center">{idx + 1}</td>
-                      <td className="px-3 py-2"><input className="w-24 rounded-md border px-2 py-1" value={row.type} onChange={(e) => void updateParticular(row, "type", e.target.value)} /></td>
-                      <td className="px-3 py-2"><input className="w-24 rounded-md border px-2 py-1" value={row.weight_unit} onChange={(e) => void updateParticular(row, "weight_unit", e.target.value)} /></td>
-                      <td className="px-3 py-2"><input className="w-24 rounded-md border px-2 py-1" value={row.cost_price} type="number" onChange={(e) => void updateParticular(row, "cost_price", Number(e.target.value))} /></td>
-                      <td className="px-3 py-2"><input className="w-24 rounded-md border px-2 py-1" value={row.ws_price} type="number" onChange={(e) => void updateParticular(row, "ws_price", Number(e.target.value))} /></td>
-                      <td className="px-3 py-2"><input className="w-24 rounded-md border px-2 py-1" value={row.sale_price} type="number" onChange={(e) => void updateParticular(row, "sale_price", Number(e.target.value))} /></td>
-                      <td className="px-3 py-2"><input className="w-20 rounded-md border px-2 py-1" value={row.stock_qty} type="number" onChange={(e) => void updateParticular(row, "stock_qty", Number(e.target.value))} /></td>
-                      <td className="px-3 py-2"><input className="w-20 rounded-md border px-2 py-1" value={row.min_qty} type="number" onChange={(e) => void updateParticular(row, "min_qty", Number(e.target.value))} /></td>
-                      <td className="px-3 py-2"><input className="w-20 rounded-md border px-2 py-1" value={row.max_qty} type="number" onChange={(e) => void updateParticular(row, "max_qty", Number(e.target.value))} /></td>
-                      <td className="px-3 py-2"><input className="w-24 rounded-md border px-2 py-1" value={row.formula_code} onChange={(e) => void updateParticular(row, "formula_code", e.target.value)} /></td>
-                      <td className="px-3 py-2"><button className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs hover:bg-accent" onClick={() => void openFormula(row)}><Calculator className="h-3.5 w-3.5" />Formula</button></td>
-                      <td className="px-3 py-2"><button className="rounded-md border border-destructive px-2 py-1 text-xs text-destructive hover:bg-destructive/10" onClick={() => void deleteParticular(row)}><Trash2 className="h-3.5 w-3.5" /></button></td>
+                      <td className="px-3 py-2"><input className="w-24 rounded-md border px-2 py-1" value={row.type} onChange={(e) => void runAction(() => updateParticular(row, "type", e.target.value))} /></td>
+                      <td className="px-3 py-2"><input className="w-24 rounded-md border px-2 py-1" value={row.weight_unit} onChange={(e) => void runAction(() => updateParticular(row, "weight_unit", e.target.value))} /></td>
+                      <td className="px-3 py-2"><input className="w-24 rounded-md border px-2 py-1" value={row.cost_price} type="number" onChange={(e) => void runAction(() => updateParticular(row, "cost_price", Number(e.target.value)))} /></td>
+                      <td className="px-3 py-2"><input className="w-24 rounded-md border px-2 py-1" value={row.ws_price} type="number" onChange={(e) => void runAction(() => updateParticular(row, "ws_price", Number(e.target.value)))} /></td>
+                      <td className="px-3 py-2"><input className="w-24 rounded-md border px-2 py-1" value={row.sale_price} type="number" onChange={(e) => void runAction(() => updateParticular(row, "sale_price", Number(e.target.value)))} /></td>
+                      <td className="px-3 py-2"><input className="w-20 rounded-md border px-2 py-1" value={row.stock_qty} type="number" onChange={(e) => void runAction(() => updateParticular(row, "stock_qty", Number(e.target.value)))} /></td>
+                      <td className="px-3 py-2"><input className="w-20 rounded-md border px-2 py-1" value={row.min_qty} type="number" onChange={(e) => void runAction(() => updateParticular(row, "min_qty", Number(e.target.value)))} /></td>
+                      <td className="px-3 py-2"><input className="w-20 rounded-md border px-2 py-1" value={row.max_qty} type="number" onChange={(e) => void runAction(() => updateParticular(row, "max_qty", Number(e.target.value)))} /></td>
+                      <td className="px-3 py-2"><input className="w-24 rounded-md border px-2 py-1" value={row.formula_code} onChange={(e) => void runAction(() => updateParticular(row, "formula_code", e.target.value))} /></td>
+                      <td className="px-3 py-2"><button className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs hover:bg-accent" onClick={() => void runAction(() => openFormula(row))}><Calculator className="h-3.5 w-3.5" />Formula</button></td>
+                      <td className="px-3 py-2"><button className="rounded-md border border-destructive px-2 py-1 text-xs text-destructive hover:bg-destructive/10" onClick={() => void runAction(() => deleteParticular(row))}><Trash2 className="h-3.5 w-3.5" /></button></td>
                     </tr>
                   ))}
                   </tbody>

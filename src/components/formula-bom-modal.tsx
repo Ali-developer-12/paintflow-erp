@@ -55,6 +55,7 @@ export default function FormulaBomModal({
   const [formulaLines, setFormulaLines] = useState<FormulaLine[]>([]);
   const [formulaCode, setFormulaCode] = useState("");
   const [modalBusy, setModalBusy] = useState(false);
+  const [error, setError] = useState("");
 
   async function loadFormula(particularRow: Particular) {
     const payload = await apiGet<{ formula: any; lines: FormulaLine[] }>(`/formulas/${particularRow.id}`);
@@ -78,6 +79,7 @@ export default function FormulaBomModal({
 
   async function saveFormula() {
     if (!particular) return;
+    setError("");
     setModalBusy(true);
     try {
       const totalCost = formulaLines.reduce(
@@ -112,6 +114,8 @@ export default function FormulaBomModal({
         );
       }
       onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save formula");
     } finally {
       setModalBusy(false);
     }
@@ -124,7 +128,8 @@ export default function FormulaBomModal({
 
   useEffect(() => {
     if (!particular) return;
-    void loadFormula(particular);
+    setError("");
+    void loadFormula(particular).catch((err) => setError(err instanceof Error ? err.message : "Unable to load formula"));
   }, [particular]);
 
   if (!particular) return null;
@@ -154,6 +159,7 @@ export default function FormulaBomModal({
         </div>
 
         <div className="mt-4">
+          {error && <div className="mb-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>}
           <div className="grid grid-cols-[140px_1fr] items-center gap-2">
             <label className="text-xs font-medium">Formula Code</label>
             <input
