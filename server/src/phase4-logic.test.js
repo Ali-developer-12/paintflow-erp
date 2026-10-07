@@ -12,14 +12,17 @@ test("calculateProductionRequirements multiplies formula lines by batch size and
     1,
   );
 
-  assert.deepEqual(result.lines.map((line) => ({
-    material_name: line.material_name,
-    qtyRequired: Number(line.qtyRequired),
-    amount: Number(line.amount),
-  })), [
-    { material_name: "Solvent", qtyRequired: 8, amount: 120 },
-    { material_name: "Pigment", qtyRequired: 2, amount: 80 },
-  ]);
+  assert.deepEqual(
+    result.lines.map((line) => ({
+      material_name: line.material_name,
+      qtyRequired: Number(line.qtyRequired),
+      amount: Number(line.amount),
+    })),
+    [
+      { material_name: "Solvent", qtyRequired: 8, amount: 120 },
+      { material_name: "Pigment", qtyRequired: 2, amount: 80 },
+    ],
+  );
   assert.equal(result.totalMaterialCost, 200);
   assert.equal(result.batchMultiplier, 4);
 });
@@ -48,5 +51,9 @@ test("calculateProductionRequirements handles fractional batch quantities withou
   );
   assert.equal(result.totalMaterialCost, 6);
   assert.ok(Number.isFinite(result.batchMultiplier));
-  assert.ok(result.lines.every((line) => Number.isFinite(Number(line.qtyRequired)) && Number.isFinite(Number(line.amount))));
+  assert.ok(
+    result.lines.every(
+      (line) => Number.isFinite(Number(line.qtyRequired)) && Number.isFinite(Number(line.amount)),
+    ),
+  );
 });

@@ -5,7 +5,7 @@
  */
 
 export const API_URL =
-  (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:3001/api";
+  (import.meta.env["VITE_API_URL"] as string | undefined) ?? "http://localhost:3001/api";
 
 const TOKEN_KEY = "paint-erp.token";
 const USER_KEY = "paint-erp.user";
@@ -51,10 +51,7 @@ export class ApiError extends Error {
   }
 }
 
-export async function api<T = unknown>(
-  path: string,
-  options: RequestInit = {},
-): Promise<T> {
+export async function api<T = unknown>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
   let res: Response;
   try {
@@ -100,9 +97,9 @@ export async function api<T = unknown>(
   return data as T;
 }
 
-export const apiGet = <T,>(path: string) => api<T>(path);
-export const apiPost = <T,>(path: string, body: unknown) =>
+export const apiGet = <T>(path: string) => api<T>(path);
+export const apiPost = <T>(path: string, body: unknown) =>
   api<T>(path, { method: "POST", body: JSON.stringify(body) });
-export const apiPut = <T,>(path: string, body: unknown) =>
+export const apiPut = <T>(path: string, body: unknown) =>
   api<T>(path, { method: "PUT", body: JSON.stringify(body) });
-export const apiDelete = <T,>(path: string) => api<T>(path, { method: "DELETE" });
+export const apiDelete = <T>(path: string) => api<T>(path, { method: "DELETE" });

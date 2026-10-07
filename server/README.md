@@ -7,16 +7,18 @@ Local-only API server. No cloud services.
 ```bash
 cd server
 npm install
-npm run init-db     # creates data/paint-erp.db, schema, default admin
+PAINT_ERP_ADMIN_USERNAME=admin PAINT_ERP_ADMIN_PASSWORD='your-strong-password' npm run init-db
 npm start           # http://localhost:3001
 ```
-
-Default login: `admin` / `admin123`
 
 ## Environment
 
 - `PORT` — default `3001`
 - `DB_PATH` — default `server/data/paint-erp.db`
+- `PAINT_ERP_ADMIN_USERNAME` — username for the bootstrap administrator
+- `PAINT_ERP_ADMIN_PASSWORD` — strong initial password used only on first run
+
+The API does not ship with a hard-coded default admin credential.
 
 ## Frontend
 

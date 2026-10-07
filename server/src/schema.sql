@@ -274,6 +274,7 @@ CREATE TABLE IF NOT EXISTS sale_lines (
   description   TEXT,
   qty           REAL NOT NULL DEFAULT 0,
   rate          REAL NOT NULL DEFAULT 0,
+  cost_price    REAL DEFAULT 0,
   amount        REAL NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_sale_lines ON sale_lines(sale_id);
@@ -327,6 +328,7 @@ CREATE TABLE IF NOT EXISTS return_lines (
   description     TEXT,
   qty             REAL NOT NULL DEFAULT 0,
   rate            REAL NOT NULL DEFAULT 0,
+  cost_price      REAL DEFAULT 0,
   amount          REAL NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_return_lines ON return_lines(return_id);
@@ -383,6 +385,19 @@ CREATE TABLE IF NOT EXISTS account_ledger (
 CREATE INDEX IF NOT EXISTS idx_ledger_account ON account_ledger(account_id);
 CREATE INDEX IF NOT EXISTS idx_ledger_date ON account_ledger(date);
 
+-- A business document may be posted to the ledger at most once. The application
+-- already checks for an existing voucher before posting, but an application-only
+-- check is not enough: two concurrent requests can both pass it. This index makes
+-- a duplicate posting impossible at the storage layer, which is the only place
+-- the guarantee actually holds.
+--
+-- NULL ref_type/ref_id rows (standalone journal vouchers) are excluded, because
+-- SQLite treats NULLs as distinct in a UNIQUE index and would otherwise reject
+-- nothing while appearing to enforce the rule.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_vouchers_ref_unique
+  ON account_vouchers(ref_type, ref_id)
+  WHERE ref_type IS NOT NULL AND ref_id IS NOT NULL;
+
 -- =========================================================
 -- 11. BACKUP LOG
 -- =========================================================
@@ -395,6 +410,33 @@ CREATE TABLE IF NOT EXISTS backups (
 );
 
 -- =========================================================
+-- 13. VOUCHER SEQUENCES (collision-free document numbering)
+-- =========================================================
+-- Document numbers are generated from a database-backed counter inside the
+-- same transaction as the document itself. This replaces timestamp-based
+-- numbering, which can collide when two operators save within the same
+-- millisecond.
+CREATE TABLE IF NOT EXISTS voucher_sequences (
+  prefix     TEXT PRIMARY KEY,
+  next_value INTEGER NOT NULL DEFAULT 1
+);
+
+-- Migration audit log so accounting back-posting is reviewable and reversible.
+CREATE TABLE IF NOT EXISTS migration_log (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  migration     TEXT NOT NULL,
+  action        TEXT NOT NULL,   -- posted | skipped | failed
+  ref_type      TEXT,
+  ref_id        INTEGER,
+  voucher_id    INTEGER REFERENCES account_vouchers(id) ON DELETE CASCADE,
+  amount        REAL,
+  message       TEXT,
+  created_by    INTEGER REFERENCES users(id),
+  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_migration_log_migration ON migration_log(migration);
+
+-- =========================================================
 -- 12. APP SETTINGS (company info, voucher counters)
 -- =========================================================
 CREATE TABLE IF NOT EXISTS settings (
@@ -402,3 +444,153 @@ CREATE TABLE IF NOT EXISTS settings (
   value      TEXT,
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- =========================================================
+-- 14. STOCK ADJUSTMENTS & OPENING STOCK
+-- =========================================================
+CREATE TABLE IF NOT EXISTS stock_adjustments (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  voucher_no      TEXT NOT NULL UNIQUE,
+  date            TEXT NOT NULL,
+  item_type       TEXT NOT NULL, -- 'raw' | 'finished'
+  factory_item_id INTEGER REFERENCES factory_items(id),
+  particular_id   INTEGER REFERENCES item_particulars(id),
+  previous_qty    REAL NOT NULL,
+  adjustment_qty  REAL NOT NULL,
+  resulting_qty   REAL NOT NULL,
+  reason          TEXT NOT NULL,
+  user_id         INTEGER REFERENCES users(id),
+  created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_stock_adj_date ON stock_adjustments(date);
+
+CREATE TABLE IF NOT EXISTS opening_stocks (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  voucher_no      TEXT NOT NULL UNIQUE,
+  date            TEXT NOT NULL,
+  item_type       TEXT NOT NULL, -- 'raw' | 'finished'
+  factory_item_id INTEGER REFERENCES factory_items(id),
+  particular_id   INTEGER REFERENCES item_particulars(id),
+  qty             REAL NOT NULL,
+  unit_cost       REAL NOT NULL DEFAULT 0,
+  total_value     REAL NOT NULL DEFAULT 0,
+  user_id         INTEGER REFERENCES users(id),
+  remarks         TEXT,
+  created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_opening_stock_date ON opening_stocks(date);
+
+-- =========================================================
+-- 15. RECEIPTS & PAYMENTS
+-- =========================================================
+CREATE TABLE IF NOT EXISTS customer_receipts (
+  id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+  voucher_no         TEXT NOT NULL UNIQUE,
+  date               TEXT NOT NULL,
+  customer_id        INTEGER NOT NULL REFERENCES customers(id),
+  payment_mode       TEXT NOT NULL DEFAULT 'cash', -- 'cash' | 'bank'
+  payment_account_id INTEGER NOT NULL REFERENCES accounts(id),
+  amount             REAL NOT NULL,
+  reference_no       TEXT,
+  remarks            TEXT,
+  created_by         INTEGER REFERENCES users(id),
+  created_at         TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_receipts_customer ON customer_receipts(customer_id);
+CREATE INDEX IF NOT EXISTS idx_receipts_date ON customer_receipts(date);
+
+CREATE TABLE IF NOT EXISTS supplier_payments (
+  id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+  voucher_no         TEXT NOT NULL UNIQUE,
+  date               TEXT NOT NULL,
+  supplier_id        INTEGER NOT NULL REFERENCES suppliers(id),
+  payment_mode       TEXT NOT NULL DEFAULT 'cash', -- 'cash' | 'bank'
+  payment_account_id INTEGER NOT NULL REFERENCES accounts(id),
+  amount             REAL NOT NULL,
+  reference_no       TEXT,
+  remarks            TEXT,
+  created_by         INTEGER REFERENCES users(id),
+  created_at         TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_payments_supplier ON supplier_payments(supplier_id);
+CREATE INDEX IF NOT EXISTS idx_payments_date ON supplier_payments(date);
+
+-- =========================================================
+-- 16. EXPENSES, INCOME & JOURNAL VOUCHERS
+-- =========================================================
+CREATE TABLE IF NOT EXISTS expense_vouchers (
+  id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+  voucher_no         TEXT NOT NULL UNIQUE,
+  date               TEXT NOT NULL,
+  expense_account_id INTEGER NOT NULL REFERENCES accounts(id),
+  payment_account_id INTEGER NOT NULL REFERENCES accounts(id),
+  amount             REAL NOT NULL,
+  reference_no       TEXT,
+  remarks            TEXT,
+  created_by         INTEGER REFERENCES users(id),
+  created_at         TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_expenses_date ON expense_vouchers(date);
+
+CREATE TABLE IF NOT EXISTS income_vouchers (
+  id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+  voucher_no         TEXT NOT NULL UNIQUE,
+  date               TEXT NOT NULL,
+  income_account_id  INTEGER NOT NULL REFERENCES accounts(id),
+  payment_account_id INTEGER NOT NULL REFERENCES accounts(id),
+  amount             REAL NOT NULL,
+  reference_no       TEXT,
+  remarks            TEXT,
+  created_by         INTEGER REFERENCES users(id),
+  created_at         TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_income_date ON income_vouchers(date);
+
+CREATE TABLE IF NOT EXISTS journal_vouchers (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  voucher_no   TEXT NOT NULL UNIQUE,
+  date         TEXT NOT NULL,
+  reference_no TEXT,
+  remarks      TEXT,
+  total_amount REAL NOT NULL,
+  created_by   INTEGER REFERENCES users(id),
+  created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_journals_date ON journal_vouchers(date);
+
+CREATE TABLE IF NOT EXISTS journal_voucher_lines (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  voucher_id INTEGER NOT NULL REFERENCES journal_vouchers(id) ON DELETE CASCADE,
+  account_id INTEGER NOT NULL REFERENCES accounts(id),
+  debit      REAL NOT NULL DEFAULT 0,
+  credit     REAL NOT NULL DEFAULT 0,
+  narration  TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_journal_lines_voucher ON journal_voucher_lines(voucher_id);
+
+-- =========================================================
+-- 17. AUDIT TRAIL
+-- =========================================================
+CREATE TABLE IF NOT EXISTS audit_log (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    INTEGER REFERENCES users(id),
+  username   TEXT,
+  action     TEXT NOT NULL,
+  entity     TEXT NOT NULL,
+  entity_id  TEXT,
+  details    TEXT,
+  ip_address TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_audit_log_entity ON audit_log(entity, entity_id);
+CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action);
+CREATE INDEX IF NOT EXISTS idx_audit_log_date ON audit_log(created_at);
+
+-- Performance indexes for date queries and sessions
+CREATE INDEX IF NOT EXISTS idx_stock_ledger_ref ON stock_ledger(ref_type, ref_id);
+CREATE INDEX IF NOT EXISTS idx_purchases_date ON purchases(date);
+CREATE INDEX IF NOT EXISTS idx_sales_date ON sales(date);
+CREATE INDEX IF NOT EXISTS idx_returns_date ON returns(date);
+CREATE INDEX IF NOT EXISTS idx_productions_date ON productions(date);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
+

@@ -4,11 +4,24 @@ import { Plus, Save, Trash2 } from "lucide-react";
 import { apiGet, apiPost } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type Customer = { id: number; name: string };
 type Supplier = { id: number; name: string };
-type Particular = { id: number; item_id: number; type: string; weight_unit: string; stock_qty: number; item_name?: string };
+type Particular = {
+  id: number;
+  item_id: number;
+  type: string;
+  weight_unit: string;
+  stock_qty: number;
+  item_name?: string;
+};
 
 type ReturnLine = { particular_id: number; description: string; qty: number; rate: number };
 
@@ -37,14 +50,24 @@ function ReturnsPage() {
       setSuppliers(suppliersData);
       setParticulars(particularsData);
       if (particularsData[0]) {
-        setLines([{ particular_id: particularsData[0].id, description: particularsData[0].item_name ?? "", qty: 1, rate: 0 }]);
+        setLines([
+          {
+            particular_id: particularsData[0].id,
+            description: particularsData[0].item_name ?? "",
+            qty: 1,
+            rate: 0,
+          },
+        ]);
       }
     })();
   }, []);
 
   function addLine() {
     const base = particulars[0];
-    setLines((cur) => [...cur, { particular_id: base ? base.id : 0, description: base?.item_name ?? "", qty: 1, rate: 0 }]);
+    setLines((cur) => [
+      ...cur,
+      { particular_id: base ? base.id : 0, description: base?.item_name ?? "", qty: 1, rate: 0 },
+    ]);
   }
 
   function removeLine(index: number) {
@@ -57,9 +80,16 @@ function ReturnsPage() {
         if (i !== index) return line;
         if (field === "particular_id") {
           const selected = particulars.find((item) => item.id === Number(value));
-          return { ...line, particular_id: Number(value), description: selected?.item_name ?? line.description };
+          return {
+            ...line,
+            particular_id: Number(value),
+            description: selected?.item_name ?? line.description,
+          };
         }
-        return { ...line, [field]: field === "qty" || field === "rate" ? Number(value || 0) : value } as ReturnLine;
+        return {
+          ...line,
+          [field]: field === "qty" || field === "rate" ? Number(value || 0) : value,
+        } as ReturnLine;
       }),
     );
   }
@@ -87,7 +117,14 @@ function ReturnsPage() {
     setRemarks("");
     setLines([]);
     if (particulars[0]) {
-      setLines([{ particular_id: particulars[0].id, description: particulars[0].item_name ?? "", qty: 1, rate: 0 }]);
+      setLines([
+        {
+          particular_id: particulars[0].id,
+          description: particulars[0].item_name ?? "",
+          qty: 1,
+          rate: 0,
+        },
+      ]);
     }
   }
 
@@ -102,8 +139,13 @@ function ReturnsPage() {
         <div className="grid gap-4 md:grid-cols-3">
           <div>
             <label className="mb-1 block text-sm font-medium">Return type</label>
-            <Select value={returnType} onValueChange={(value) => setReturnType(value as "customer" | "supplier")}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+            <Select
+              value={returnType}
+              onValueChange={(value) => setReturnType(value as "customer" | "supplier")}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="customer">Customer</SelectItem>
                 <SelectItem value="supplier">Supplier</SelectItem>
@@ -111,18 +153,33 @@ function ReturnsPage() {
             </Select>
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium">{returnType === "customer" ? "Customer" : "Supplier"}</label>
-            <Select value={returnType === "customer" ? customerId : supplierId} onValueChange={(value) => (returnType === "customer" ? setCustomerId(value) : setSupplierId(value))}>
-              <SelectTrigger><SelectValue placeholder={returnType === "customer" ? "Select customer" : "Select supplier"} /></SelectTrigger>
+            <label className="mb-1 block text-sm font-medium">
+              {returnType === "customer" ? "Customer" : "Supplier"}
+            </label>
+            <Select
+              value={returnType === "customer" ? customerId : supplierId}
+              onValueChange={(value) =>
+                returnType === "customer" ? setCustomerId(value) : setSupplierId(value)
+              }
+            >
+              <SelectTrigger>
+                <SelectValue
+                  placeholder={returnType === "customer" ? "Select customer" : "Select supplier"}
+                />
+              </SelectTrigger>
               <SelectContent>
                 {(returnType === "customer" ? customers : suppliers).map((party) => (
-                  <SelectItem key={party.id} value={String(party.id)}>{party.name}</SelectItem>
+                  <SelectItem key={party.id} value={String(party.id)}>
+                    {party.name}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div className="flex items-end justify-end">
-            <Button onClick={addLine}><Plus className="h-4 w-4" /> Add line</Button>
+            <Button onClick={addLine}>
+              <Plus className="h-4 w-4" /> Add line
+            </Button>
           </div>
         </div>
 
@@ -147,20 +204,50 @@ function ReturnsPage() {
               {lines.map((line, index) => (
                 <tr key={`${line.particular_id}-${index}`} className="border-t border-border">
                   <td className="p-2">
-                    <Select value={String(line.particular_id)} onValueChange={(value) => updateLine(index, "particular_id", value)}>
-                      <SelectTrigger className="w-52"><SelectValue placeholder="Select item" /></SelectTrigger>
+                    <Select
+                      value={String(line.particular_id)}
+                      onValueChange={(value) => updateLine(index, "particular_id", value)}
+                    >
+                      <SelectTrigger className="w-52">
+                        <SelectValue placeholder="Select item" />
+                      </SelectTrigger>
                       <SelectContent>
                         {particulars.map((particular) => (
-                          <SelectItem key={particular.id} value={String(particular.id)}>{particular.item_name ?? `Particular ${particular.id}`}</SelectItem>
+                          <SelectItem key={particular.id} value={String(particular.id)}>
+                            {particular.item_name ?? `Particular ${particular.id}`}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </td>
-                  <td className="p-2"><Input value={line.description} onChange={(e) => updateLine(index, "description", e.target.value)} /></td>
-                  <td className="p-2"><Input type="number" value={line.qty} onChange={(e) => updateLine(index, "qty", Number(e.target.value))} /></td>
-                  <td className="p-2"><Input type="number" value={line.rate} onChange={(e) => updateLine(index, "rate", Number(e.target.value))} /></td>
-                  <td className="p-2">{(Number(line.qty || 0) * Number(line.rate || 0)).toLocaleString()}</td>
-                  <td className="p-2"><Button variant="destructive" size="sm" onClick={() => removeLine(index)}><Trash2 className="h-3.5 w-3.5" /></Button></td>
+                  <td className="p-2">
+                    <Input
+                      value={line.description}
+                      onChange={(e) => updateLine(index, "description", e.target.value)}
+                    />
+                  </td>
+                  <td className="p-2">
+                    <Input
+                      type="number"
+                      value={line.qty}
+                      onChange={(e) => updateLine(index, "qty", Number(e.target.value))}
+                    />
+                  </td>
+                  <td className="p-2">
+                    <Input
+                      type="number"
+                      value={line.rate}
+                      onChange={(e) => updateLine(index, "rate", Number(e.target.value))}
+                    />
+                  </td>
+                  <td className="p-2">
+                    {(Number(line.qty || 0) * Number(line.rate || 0)).toLocaleString()}
+                  </td>
+                  <td className="p-2">
+                    <Button variant="destructive" size="sm" onClick={() => removeLine(index)}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -168,7 +255,9 @@ function ReturnsPage() {
         </div>
 
         <div className="mt-5 flex justify-end">
-          <Button onClick={() => void saveReturn()}><Save className="h-4 w-4" /> Save return</Button>
+          <Button onClick={() => void saveReturn()}>
+            <Save className="h-4 w-4" /> Save return
+          </Button>
         </div>
       </div>
     </div>

@@ -60,7 +60,6 @@ function PurchasePage() {
   const [items, setItems] = useState<Item[]>([]);
   const [particularsByItem, setParticularsByItem] = useState<Record<number, Particular[]>>({});
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>("");
-  const [supplierNameInput, setSupplierNameInput] = useState("");
   const [lines, setLines] = useState<PurchaseLine[]>([makeLine()]);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -99,7 +98,7 @@ function PurchasePage() {
     })();
   }, []);
 
-  const isManualSupplier = suppliers.length === 0;
+  const hasSuppliers = suppliers.length > 0;
 
   const total = useMemo(
     () => lines.reduce((sum, line) => sum + Number(line.amount || 0), 0),
@@ -130,7 +129,9 @@ function PurchasePage() {
   }
 
   function removeLine(index: number) {
-    setLines((current) => (current.length > 1 ? current.filter((_, rowIndex) => rowIndex !== index) : [makeLine()]));
+    setLines((current) =>
+      current.length > 1 ? current.filter((_, rowIndex) => rowIndex !== index) : [makeLine()],
+    );
   }
 
   async function handleSubmit() {
@@ -143,8 +144,10 @@ function PurchasePage() {
         const rate = Number(line.rate || 0);
         if (qty <= 0 || rate < 0) return null;
 
-        const factoryItemId = line.stockType === "factory" ? Number(line.factory_item_id || 0) : null;
-        const particularId = line.stockType === "particular" ? Number(line.particular_id || 0) : null;
+        const factoryItemId =
+          line.stockType === "factory" ? Number(line.factory_item_id || 0) : null;
+        const particularId =
+          line.stockType === "particular" ? Number(line.particular_id || 0) : null;
 
         if (!factoryItemId && !particularId) {
           return null;
@@ -162,7 +165,9 @@ function PurchasePage() {
               : items
                   .map((item) => ({ item, particulars: particularsByItem[item.id] || [] }))
                   .flatMap(({ item, particulars }) =>
-                    particulars.filter((particular) => particular.id === particularId).map(() => `${item.name} / ${particular.type}`),
+                    particulars
+                      .filter((row) => row.id === particularId)
+                      .map((row) => `${item.name} / ${row.type}`),
                   )[0] || "",
         };
       })
@@ -173,18 +178,22 @@ function PurchasePage() {
       return;
     }
 
+    const supplierId = Number(selectedSupplierId || 0);
+    if (!supplierId) {
+      setError("Select a supplier from the supplier master.");
+      return;
+    }
+
     try {
       setIsSaving(true);
       await apiPost("/purchases", {
         date: new Date().toISOString().slice(0, 10),
-        supplier_id: isManualSupplier ? undefined : Number(selectedSupplierId || 0),
-        supplier_name: isManualSupplier ? supplierNameInput : undefined,
+        supplier_id: supplierId,
         remarks: "",
         lines: payloadLines,
       });
       setSuccess("Purchase recorded successfully.");
       setLines([makeLine()]);
-      setSupplierNameInput("");
       setSelectedSupplierId(suppliers[0] ? String(suppliers[0].id) : "");
       const refreshedFactoryItems = await apiGet<FactoryItem[]>("/factory-items");
       const refreshedSuppliers = await apiGet<Supplier[]>("/suppliers");
@@ -207,18 +216,15 @@ function PurchasePage() {
       </div>
 
       <div className="rounded-md border border-border bg-card p-4">
-        {isLoading && <div className="mb-4 rounded-md bg-muted/40 px-3 py-2 text-sm text-muted-foreground">Loading purchase data...</div>}
+        {isLoading && (
+          <div className="mb-4 rounded-md bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+            Loading purchase data...
+          </div>
+        )}
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <label className="text-sm font-medium">Supplier</label>
-            {isManualSupplier ? (
-              <input
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                value={supplierNameInput}
-                onChange={(event) => setSupplierNameInput(event.target.value)}
-                placeholder="Add supplier name"
-              />
-            ) : (
+            {hasSuppliers ? (
               <select
                 className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
                 value={selectedSupplierId}
@@ -230,8 +236,16 @@ function PurchasePage() {
                   </option>
                 ))}
               </select>
+            ) : (
+              <div className="rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+                No suppliers configured.
+              </div>
             )}
-            {isManualSupplier && <p className="text-xs text-muted-foreground">Temporary supplier-name shim while Phase 3 supplier CRUD is still pending.</p>}
+            {!hasSuppliers && (
+              <p className="text-xs text-muted-foreground">
+                Add a supplier in Setup / Masters before recording a purchase.
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -256,13 +270,20 @@ function PurchasePage() {
 
         <div className="space-y-3">
           {lines.map((line, index) => (
-            <div key={line.id} className="grid gap-3 rounded-md border border-border bg-muted/20 p-3 md:grid-cols-[1.2fr_1.2fr_1fr_1fr_1fr_auto]">
+            <div
+              key={line.id}
+              className="grid gap-3 rounded-md border border-border bg-muted/20 p-3 md:grid-cols-[1.2fr_1.2fr_1fr_1fr_1fr_auto]"
+            >
               <div className="space-y-1">
-                <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Stock type</label>
+                <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Stock type
+                </label>
                 <select
                   className="w-full rounded-md border border-border bg-background px-2 py-2 text-sm"
                   value={line.stockType}
-                  onChange={(event) => updateLine(index, { stockType: event.target.value as "factory" | "particular" })}
+                  onChange={(event) =>
+                    updateLine(index, { stockType: event.target.value as "factory" | "particular" })
+                  }
                 >
                   <option value="factory">Raw material</option>
                   <option value="particular">Finished item</option>
@@ -271,7 +292,9 @@ function PurchasePage() {
 
               {line.stockType === "factory" ? (
                 <div className="space-y-1">
-                  <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Material</label>
+                  <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Material
+                  </label>
                   <select
                     className="w-full rounded-md border border-border bg-background px-2 py-2 text-sm"
                     value={line.factory_item_id}
@@ -287,7 +310,9 @@ function PurchasePage() {
                 </div>
               ) : (
                 <div className="space-y-1">
-                  <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Finished item</label>
+                  <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Finished item
+                  </label>
                   <select
                     className="w-full rounded-md border border-border bg-background px-2 py-2 text-sm"
                     value={line.particular_id}
@@ -315,7 +340,9 @@ function PurchasePage() {
               )}
 
               <div className="space-y-1">
-                <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Qty</label>
+                <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Qty
+                </label>
                 <input
                   type="number"
                   min="0"
@@ -327,7 +354,9 @@ function PurchasePage() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Rate</label>
+                <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Rate
+                </label>
                 <input
                   type="number"
                   min="0"
@@ -339,7 +368,9 @@ function PurchasePage() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Amount</label>
+                <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Amount
+                </label>
                 <div className="rounded-md border border-border bg-background px-2 py-2 text-sm font-medium tabular-nums">
                   {Number(line.amount || 0).toLocaleString()}
                 </div>
@@ -361,12 +392,21 @@ function PurchasePage() {
 
         {factoryItems.length === 0 && (
           <div className="mt-4 rounded-md border border-dashed border-border p-3 text-sm text-muted-foreground">
-            No raw materials exist yet. A purchase can be saved only after the factory item list is populated.
+            No raw materials exist yet. A purchase can be saved only after the factory item list is
+            populated.
           </div>
         )}
 
-        {error && <div className="mt-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>}
-        {success && <div className="mt-4 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700">{success}</div>}
+        {error && (
+          <div className="mt-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {error}
+          </div>
+        )}
+        {success && (
+          <div className="mt-4 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700">
+            {success}
+          </div>
+        )}
 
         <div className="mt-4 flex justify-end">
           <button

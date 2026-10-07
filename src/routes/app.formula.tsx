@@ -112,13 +112,20 @@ function FormulaPage() {
       </div>
 
       <section className="rounded-md border border-border bg-card">
-        {error && <div className="m-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>}
+        {error && (
+          <div className="m-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {error}
+          </div>
+        )}
         {loading && <div className="p-3 text-sm text-muted-foreground">Loading formulas…</div>}
 
         {!loading && rows.length === 0 && (
           <div className="flex flex-col items-center justify-center gap-2 p-10 text-sm text-muted-foreground">
             <span>No Formula / BOM records have been created yet.</span>
-            <Link to="/app/items" className="inline-flex items-center gap-1 font-medium text-primary">
+            <Link
+              to="/app/items"
+              className="inline-flex items-center gap-1 font-medium text-primary"
+            >
               <ArrowUpRight className="h-4 w-4" /> Jump to Items Master
             </Link>
           </div>
@@ -149,20 +156,23 @@ function FormulaPage() {
                       <button
                         className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs hover:bg-accent"
                         onClick={() =>
-                          void openFormula({
-                            id: row.particular_id,
-                            item_id: row.item_id,
-                            type: row.type,
-                            weight_unit: "",
-                            cost_price: 0,
-                            ws_price: 0,
-                            sale_price: 0,
-                            stock_qty: 0,
-                            min_qty: 0,
-                            max_qty: 0,
-                            formula_code: row.formula_code,
-                            sort_order: 0,
-                          }, row.item_name)
+                          void openFormula(
+                            {
+                              id: row.particular_id,
+                              item_id: row.item_id,
+                              type: row.type,
+                              weight_unit: "",
+                              cost_price: 0,
+                              ws_price: 0,
+                              sale_price: 0,
+                              stock_qty: 0,
+                              min_qty: 0,
+                              max_qty: 0,
+                              formula_code: row.formula_code,
+                              sort_order: 0,
+                            },
+                            row.item_name,
+                          )
                         }
                       >
                         <Calculator className="h-3.5 w-3.5" /> Open
@@ -180,18 +190,27 @@ function FormulaPage() {
         <section className="rounded-md border border-border bg-card p-3">
           <div className="mb-3 flex items-center justify-between">
             <div className="text-sm font-semibold">Particulars without formulas</div>
-            <Link to="/app/items" className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs hover:bg-accent">
+            <Link
+              to="/app/items"
+              className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs hover:bg-accent"
+            >
               <ArrowUpRight className="h-3.5 w-3.5" /> Items Master
             </Link>
           </div>
           <div className="space-y-2">
             {unassigned.map((row) => (
-              <div key={row.particular_id} className="flex items-center justify-between rounded-md border border-dashed border-border px-3 py-2 text-sm">
+              <div
+                key={row.particular_id}
+                className="flex items-center justify-between rounded-md border border-dashed border-border px-3 py-2 text-sm"
+              >
                 <div>
                   <span className="font-medium">{row.item_name}</span>
                   <span className="ml-2 text-muted-foreground">{row.type}</span>
                 </div>
-                <Link to="/app/items" className="inline-flex items-center gap-1 text-xs text-primary">
+                <Link
+                  to="/app/items"
+                  className="inline-flex items-center gap-1 text-xs text-primary"
+                >
                   <ArrowUpRight className="h-3.5 w-3.5" /> Create Formula
                 </Link>
               </div>

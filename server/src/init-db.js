@@ -1,16 +1,15 @@
 import db, { applySchema, DB_PATH } from "./db.js";
-import { hashPassword } from "./auth.js";
+import { ensureInitialAdminUser } from "./auth.js";
 
 applySchema();
 
-// Default admin user
-const existing = db.prepare("SELECT id FROM users WHERE username = ?").get("admin");
-if (!existing) {
-  const { hash, salt } = hashPassword("admin123");
-  db.prepare(
-    "INSERT INTO users (username, password_hash, password_salt, full_name, role) VALUES (?,?,?,?,?)",
-  ).run("admin", hash, salt, "System Administrator", "admin");
-  console.log("Created default user: admin / admin123");
+const admin = ensureInitialAdminUser();
+if (admin) {
+  console.log(`Created initial admin user: ${admin.username}`);
+} else {
+  console.warn(
+    "No initial admin user created. Set PAINT_ERP_ADMIN_USERNAME and PAINT_ERP_ADMIN_PASSWORD before bootstrapping the app.",
+  );
 }
 
 // Minimal chart of accounts skeleton
@@ -40,6 +39,8 @@ db.prepare(
    VALUES (?, ?, ?, 1)`,
 ).run(`${year}-${year + 1}`, `${year}-07-01`, `${year + 1}-06-30`);
 
-db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('company_name', 'Paint Factory')").run();
+db.prepare(
+  "INSERT OR IGNORE INTO settings (key, value) VALUES ('company_name', 'Paint Factory')",
+).run();
 
 console.log("Database initialised at", DB_PATH);

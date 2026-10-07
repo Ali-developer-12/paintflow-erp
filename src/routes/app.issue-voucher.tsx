@@ -4,10 +4,23 @@ import { Plus, Save, Trash2 } from "lucide-react";
 import { apiGet, apiPost } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type Customer = { id: number; name: string };
-type Particular = { id: number; item_id: number; type: string; weight_unit: string; stock_qty: number; item_name?: string };
+type Particular = {
+  id: number;
+  item_id: number;
+  type: string;
+  weight_unit: string;
+  stock_qty: number;
+  item_name?: string;
+};
 
 type IssueLine = { particular_id: number; size: string; shade: string; qty: number };
 
@@ -33,7 +46,14 @@ function IssueVoucherPage() {
       setCustomers(customersData);
       setParticulars(particularsData);
       if (particularsData[0]) {
-        setLines([{ particular_id: particularsData[0].id, size: particularsData[0].type, shade: particularsData[0].weight_unit, qty: 1 }]);
+        setLines([
+          {
+            particular_id: particularsData[0].id,
+            size: particularsData[0].type,
+            shade: particularsData[0].weight_unit,
+            qty: 1,
+          },
+        ]);
       }
     })();
   }, []);
@@ -42,7 +62,12 @@ function IssueVoucherPage() {
     const base = particulars[0];
     setLines((cur) => [
       ...cur,
-      { particular_id: base ? base.id : 0, size: base?.type ?? "", shade: base?.weight_unit ?? "", qty: 1 },
+      {
+        particular_id: base ? base.id : 0,
+        size: base?.type ?? "",
+        shade: base?.weight_unit ?? "",
+        qty: 1,
+      },
     ]);
   }
 
@@ -56,7 +81,12 @@ function IssueVoucherPage() {
         if (i !== index) return line;
         if (field === "particular_id") {
           const selected = particulars.find((item) => item.id === Number(value));
-          return { ...line, particular_id: Number(value), size: selected?.type ?? "", shade: selected?.weight_unit ?? "" };
+          return {
+            ...line,
+            particular_id: Number(value),
+            size: selected?.type ?? "",
+            shade: selected?.weight_unit ?? "",
+          };
         }
         return { ...line, [field]: field === "qty" ? Number(value || 0) : value } as IssueLine;
       }),
@@ -86,7 +116,14 @@ function IssueVoucherPage() {
     setRemarks("");
     setLines([]);
     if (particulars[0]) {
-      setLines([{ particular_id: particulars[0].id, size: particulars[0].type, shade: particulars[0].weight_unit, qty: 1 }]);
+      setLines([
+        {
+          particular_id: particulars[0].id,
+          size: particulars[0].type,
+          shade: particulars[0].weight_unit,
+          qty: 1,
+        },
+      ]);
     }
   }
 
@@ -110,16 +147,22 @@ function IssueVoucherPage() {
           <div>
             <label className="mb-1 block text-sm font-medium">Customer</label>
             <Select value={customerId} onValueChange={setCustomerId}>
-              <SelectTrigger><SelectValue placeholder="Select customer" /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue placeholder="Select customer" />
+              </SelectTrigger>
               <SelectContent>
                 {customers.map((customer) => (
-                  <SelectItem key={customer.id} value={String(customer.id)}>{customer.name}</SelectItem>
+                  <SelectItem key={customer.id} value={String(customer.id)}>
+                    {customer.name}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div className="flex items-end justify-end">
-            <Button onClick={addLine}><Plus className="h-4 w-4" /> Add line</Button>
+            <Button onClick={addLine}>
+              <Plus className="h-4 w-4" /> Add line
+            </Button>
           </div>
         </div>
 
@@ -142,24 +185,57 @@ function IssueVoucherPage() {
             </thead>
             <tbody>
               {lines.map((line, index) => {
-                const selectedParticular = particulars.find((particular) => particular.id === line.particular_id);
+                const selectedParticular = particulars.find(
+                  (particular) => particular.id === line.particular_id,
+                );
                 return (
                   <tr key={`${line.particular_id}-${index}`} className="border-t border-border">
                     <td className="p-2">
-                      <Select value={String(line.particular_id)} onValueChange={(value) => updateLine(index, "particular_id", value)}>
-                        <SelectTrigger className="w-52"><SelectValue placeholder="Select item" /></SelectTrigger>
+                      <Select
+                        value={String(line.particular_id)}
+                        onValueChange={(value) => updateLine(index, "particular_id", value)}
+                      >
+                        <SelectTrigger className="w-52">
+                          <SelectValue placeholder="Select item" />
+                        </SelectTrigger>
                         <SelectContent>
                           {particulars.map((particular) => (
-                            <SelectItem key={particular.id} value={String(particular.id)}>{particular.item_name ?? `Particular ${particular.id}`}</SelectItem>
+                            <SelectItem key={particular.id} value={String(particular.id)}>
+                              {particular.item_name ?? `Particular ${particular.id}`}
+                            </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     </td>
-                    <td className="p-2"><Input value={line.size} onChange={(e) => updateLine(index, "size", e.target.value)} /></td>
-                    <td className="p-2"><Input value={line.shade} onChange={(e) => updateLine(index, "shade", e.target.value)} /></td>
-                    <td className="p-2">{selectedParticular ? Number(selectedParticular.stock_qty || 0).toLocaleString() : 0}</td>
-                    <td className="p-2"><Input type="number" value={line.qty} onChange={(e) => updateLine(index, "qty", Number(e.target.value))} /></td>
-                    <td className="p-2"><Button variant="destructive" size="sm" onClick={() => removeLine(index)}><Trash2 className="h-3.5 w-3.5" /></Button></td>
+                    <td className="p-2">
+                      <Input
+                        value={line.size}
+                        onChange={(e) => updateLine(index, "size", e.target.value)}
+                      />
+                    </td>
+                    <td className="p-2">
+                      <Input
+                        value={line.shade}
+                        onChange={(e) => updateLine(index, "shade", e.target.value)}
+                      />
+                    </td>
+                    <td className="p-2">
+                      {selectedParticular
+                        ? Number(selectedParticular.stock_qty || 0).toLocaleString()
+                        : 0}
+                    </td>
+                    <td className="p-2">
+                      <Input
+                        type="number"
+                        value={line.qty}
+                        onChange={(e) => updateLine(index, "qty", Number(e.target.value))}
+                      />
+                    </td>
+                    <td className="p-2">
+                      <Button variant="destructive" size="sm" onClick={() => removeLine(index)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </td>
                   </tr>
                 );
               })}
@@ -168,7 +244,9 @@ function IssueVoucherPage() {
         </div>
 
         <div className="mt-5 flex justify-end">
-          <Button onClick={() => void saveVoucher()}><Save className="h-4 w-4" /> Save voucher</Button>
+          <Button onClick={() => void saveVoucher()}>
+            <Save className="h-4 w-4" /> Save voucher
+          </Button>
         </div>
       </div>
     </div>

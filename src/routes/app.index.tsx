@@ -7,9 +7,15 @@ export const Route = createFileRoute("/app/")({
   head: () => ({
     meta: [
       { title: "Dashboard — Paint Factory ERP" },
-      { name: "description", content: "Live counts across items, parties, purchases, sales and production." },
+      {
+        name: "description",
+        content: "Live counts across items, parties, purchases, sales and production.",
+      },
       { property: "og:title", content: "Dashboard — Paint Factory ERP" },
-      { property: "og:description", content: "Live counts across items, parties, purchases, sales and production." },
+      {
+        property: "og:description",
+        content: "Live counts across items, parties, purchases, sales and production.",
+      },
     ],
   }),
   component: Dashboard,
@@ -24,6 +30,16 @@ type Summary = {
   purchases: number;
   sales: number;
   productions: number;
+};
+
+const PHASE_STATUS: Record<string, "Complete" | "Partial" | "Planned"> = {
+  "Phase 1": "Complete",
+  "Phase 2": "Partial",
+  "Phase 3": "Partial",
+  "Phase 4": "Complete",
+  "Phase 5": "Partial",
+  "Phase 6": "Partial",
+  "Phase 7": "Partial",
 };
 
 const CARDS: { key: keyof Summary; label: string }[] = [
@@ -88,24 +104,29 @@ function Dashboard() {
               </tr>
             </thead>
             <tbody>
-              {MODULES.map((m) => (
-                <tr key={m.to}>
-                  <td className="font-medium">{m.label}</td>
-                  <td className="text-muted-foreground">{m.group}</td>
-                  <td className="text-muted-foreground">{m.phase}</td>
-                  <td>
-                    <span
-                      className={
-                        m.phase === "Phase 1"
-                          ? "rounded-full bg-success/15 px-2 py-0.5 text-[11px] font-medium text-success"
-                          : "rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
-                      }
-                    >
-                      {m.phase === "Phase 1" ? "Complete" : "Planned"}
-                    </span>
-                  </td>
-                </tr>
-              ))}
+              {MODULES.map((m) => {
+                const status = PHASE_STATUS[m.phase] ?? "Planned";
+                return (
+                  <tr key={m.to}>
+                    <td className="font-medium">{m.label}</td>
+                    <td className="text-muted-foreground">{m.group}</td>
+                    <td className="text-muted-foreground">{m.phase}</td>
+                    <td>
+                      <span
+                        className={
+                          status === "Complete"
+                            ? "rounded-full bg-success/15 px-2 py-0.5 text-[11px] font-medium text-success"
+                            : status === "Partial"
+                              ? "rounded-full bg-warning/15 px-2 py-0.5 text-[11px] font-medium text-warning"
+                              : "rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
+                        }
+                      >
+                        {status}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

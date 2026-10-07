@@ -147,11 +147,16 @@ function ProductionPage() {
       </div>
 
       <div className="rounded-md border border-border bg-card p-4">
-        {isLoading && <div className="mb-4 rounded-md bg-muted/40 px-3 py-2 text-sm text-muted-foreground">Loading production data...</div>}
+        {isLoading && (
+          <div className="mb-4 rounded-md bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+            Loading production data...
+          </div>
+        )}
         {formulaRows.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 rounded-md border border-dashed border-border p-8 text-sm text-muted-foreground">
             <Factory className="h-6 w-6" />
-            No Formula / BOM records exist yet. Create one in the Items Master or Formula/BOM page first.
+            No Formula / BOM records exist yet. Create one in the Items Master or Formula/BOM page
+            first.
           </div>
         ) : (
           <div className="grid gap-4 md:grid-cols-[1.2fr_0.8fr]">
@@ -186,7 +191,9 @@ function ProductionPage() {
 
         {selectedFormula && formulaDetail.formula && (
           <div className="mt-4 rounded-md border border-border bg-muted/20 p-3 text-sm text-muted-foreground">
-            Formula: <span className="font-medium text-foreground">{selectedFormula.item_name}</span> / {selectedFormula.type} · Batch size {Number(formulaDetail.formula.batch_size || 1)}
+            Formula:{" "}
+            <span className="font-medium text-foreground">{selectedFormula.item_name}</span> /{" "}
+            {selectedFormula.type} · Batch size {Number(formulaDetail.formula.batch_size || 1)}
           </div>
         )}
 
@@ -206,10 +213,18 @@ function ProductionPage() {
                 {requirements.map((line) => (
                   <tr key={line.id} className="border-t border-border">
                     <td className="px-3 py-2 font-medium">{line.material_name}</td>
-                    <td className="px-3 py-2 tabular-nums">{Number(line.value || 0).toLocaleString()}</td>
-                    <td className="px-3 py-2 tabular-nums">{Number(line.requiredQty || 0).toLocaleString()}</td>
-                    <td className="px-3 py-2 tabular-nums">{Number(line.rate || 0).toLocaleString()}</td>
-                    <td className="px-3 py-2 tabular-nums">{Number(line.totalCost || 0).toLocaleString()}</td>
+                    <td className="px-3 py-2 tabular-nums">
+                      {Number(line.value || 0).toLocaleString()}
+                    </td>
+                    <td className="px-3 py-2 tabular-nums">
+                      {Number(line.requiredQty || 0).toLocaleString()}
+                    </td>
+                    <td className="px-3 py-2 tabular-nums">
+                      {Number(line.rate || 0).toLocaleString()}
+                    </td>
+                    <td className="px-3 py-2 tabular-nums">
+                      {Number(line.totalCost || 0).toLocaleString()}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -217,8 +232,16 @@ function ProductionPage() {
           </div>
         )}
 
-        {error && <div className="mt-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>}
-        {success && <div className="mt-4 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700">{success}</div>}
+        {error && (
+          <div className="mt-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {error}
+          </div>
+        )}
+        {success && (
+          <div className="mt-4 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700">
+            {success}
+          </div>
+        )}
 
         <div className="mt-4 flex justify-end">
           <button

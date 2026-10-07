@@ -4,10 +4,24 @@ import { Plus, Trash2, Save } from "lucide-react";
 import { apiGet, apiPost } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type Customer = { id: number; name: string };
-type Particular = { id: number; item_id: number; type: string; weight_unit: string; stock_qty: number; sale_price: number; item_name?: string };
+type Particular = {
+  id: number;
+  item_id: number;
+  type: string;
+  weight_unit: string;
+  stock_qty: number;
+  sale_price: number;
+  item_name?: string;
+};
 
 type SaleLine = {
   particular_id: number;
@@ -36,7 +50,14 @@ function CounterSalePage() {
       setCustomers(customersData);
       setParticulars(particularsData);
       if (particularsData[0]) {
-        setLines([{ particular_id: particularsData[0].id, description: particularsData[0].item_name ?? "", qty: 1, rate: Number(particularsData[0].sale_price || 0) }]);
+        setLines([
+          {
+            particular_id: particularsData[0].id,
+            description: particularsData[0].item_name ?? "",
+            qty: 1,
+            rate: Number(particularsData[0].sale_price || 0),
+          },
+        ]);
       }
     })();
   }, []);
@@ -59,7 +80,10 @@ function CounterSalePage() {
             description: selected?.item_name ?? line.description,
           };
         }
-        return { ...line, [field]: field === "qty" || field === "rate" ? Number(value || 0) : value } as SaleLine;
+        return {
+          ...line,
+          [field]: field === "qty" || field === "rate" ? Number(value || 0) : value,
+        } as SaleLine;
       }),
     );
   }
@@ -101,7 +125,14 @@ function CounterSalePage() {
       });
       setLines([]);
       if (particulars[0]) {
-        setLines([{ particular_id: particulars[0].id, description: particulars[0].item_name ?? "", qty: 1, rate: Number(particulars[0].sale_price || 0) }]);
+        setLines([
+          {
+            particular_id: particulars[0].id,
+            description: particulars[0].item_name ?? "",
+            qty: 1,
+            rate: Number(particulars[0].sale_price || 0),
+          },
+        ]);
       }
     } finally {
       setSaving(false);
@@ -120,16 +151,22 @@ function CounterSalePage() {
           <div>
             <label className="mb-1 block text-sm font-medium">Customer</label>
             <Select value={customerId} onValueChange={setCustomerId}>
-              <SelectTrigger><SelectValue placeholder="Select customer" /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue placeholder="Select customer" />
+              </SelectTrigger>
               <SelectContent>
                 {customers.map((customer) => (
-                  <SelectItem key={customer.id} value={String(customer.id)}>{customer.name}</SelectItem>
+                  <SelectItem key={customer.id} value={String(customer.id)}>
+                    {customer.name}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div className="flex items-end justify-end">
-            <Button onClick={addLine}><Plus className="h-4 w-4" /> Add line</Button>
+            <Button onClick={addLine}>
+              <Plus className="h-4 w-4" /> Add line
+            </Button>
           </div>
         </div>
 
@@ -149,8 +186,13 @@ function CounterSalePage() {
               {lines.map((line, index) => (
                 <tr key={`${line.particular_id}-${index}`} className="border-t border-border">
                   <td className="p-2">
-                    <Select value={String(line.particular_id)} onValueChange={(value) => updateLine(index, "particular_id", value)}>
-                      <SelectTrigger className="w-48"><SelectValue placeholder="Select item" /></SelectTrigger>
+                    <Select
+                      value={String(line.particular_id)}
+                      onValueChange={(value) => updateLine(index, "particular_id", value)}
+                    >
+                      <SelectTrigger className="w-48">
+                        <SelectValue placeholder="Select item" />
+                      </SelectTrigger>
                       <SelectContent>
                         {particulars.map((particular) => (
                           <SelectItem key={particular.id} value={String(particular.id)}>
@@ -160,11 +202,34 @@ function CounterSalePage() {
                       </SelectContent>
                     </Select>
                   </td>
-                  <td className="p-2"><Input value={line.description} onChange={(e) => updateLine(index, "description", e.target.value)} /></td>
-                  <td className="p-2"><Input type="number" value={line.qty} onChange={(e) => updateLine(index, "qty", Number(e.target.value))} /></td>
-                  <td className="p-2"><Input type="number" value={line.rate} onChange={(e) => updateLine(index, "rate", Number(e.target.value))} /></td>
-                  <td className="p-2 text-right">{(Number(line.qty || 0) * Number(line.rate || 0)).toLocaleString()}</td>
-                  <td className="p-2"><Button variant="destructive" size="sm" onClick={() => removeLine(index)}><Trash2 className="h-3.5 w-3.5" /></Button></td>
+                  <td className="p-2">
+                    <Input
+                      value={line.description}
+                      onChange={(e) => updateLine(index, "description", e.target.value)}
+                    />
+                  </td>
+                  <td className="p-2">
+                    <Input
+                      type="number"
+                      value={line.qty}
+                      onChange={(e) => updateLine(index, "qty", Number(e.target.value))}
+                    />
+                  </td>
+                  <td className="p-2">
+                    <Input
+                      type="number"
+                      value={line.rate}
+                      onChange={(e) => updateLine(index, "rate", Number(e.target.value))}
+                    />
+                  </td>
+                  <td className="p-2 text-right">
+                    {(Number(line.qty || 0) * Number(line.rate || 0)).toLocaleString()}
+                  </td>
+                  <td className="p-2">
+                    <Button variant="destructive" size="sm" onClick={() => removeLine(index)}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -173,7 +238,9 @@ function CounterSalePage() {
 
         <div className="mt-5 flex items-center justify-between gap-4">
           <div className="text-lg font-semibold">Total: {total.toLocaleString()}</div>
-          <Button onClick={() => void saveSale()} disabled={saving}><Save className="h-4 w-4" /> {saving ? "Saving…" : "Save sale"}</Button>
+          <Button onClick={() => void saveSale()} disabled={saving}>
+            <Save className="h-4 w-4" /> {saving ? "Saving…" : "Save sale"}
+          </Button>
         </div>
       </div>
     </div>

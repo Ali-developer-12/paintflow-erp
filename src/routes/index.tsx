@@ -63,8 +63,8 @@ function LoginPage() {
             Every batch, barrel and balance in one place.
           </h1>
           <p className="mt-4 text-sm leading-relaxed opacity-70">
-            Items and formulas, purchase and production, counter sales, issue vouchers, stock ledger,
-            party accounts and reports — running entirely on your own machine.
+            Items and formulas, purchase and production, counter sales, issue vouchers, stock
+            ledger, party accounts and reports — running entirely on your own machine.
           </p>
         </div>
         <p className="text-xs opacity-50">Local SQLite database · no cloud, no internet required</p>
@@ -79,7 +79,10 @@ function LoginPage() {
 
           <form onSubmit={onSubmit} className="mt-8 space-y-4">
             <div className="space-y-1.5">
-              <label htmlFor="username" className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              <label
+                htmlFor="username"
+                className="text-xs font-medium uppercase tracking-wide text-muted-foreground"
+              >
                 Username
               </label>
               <div className="relative">
@@ -97,7 +100,10 @@ function LoginPage() {
             </div>
 
             <div className="space-y-1.5">
-              <label htmlFor="password" className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              <label
+                htmlFor="password"
+                className="text-xs font-medium uppercase tracking-wide text-muted-foreground"
+              >
                 Password
               </label>
               <div className="relative">
@@ -134,9 +140,10 @@ function LoginPage() {
           <div className="mt-8 rounded-md border border-border bg-surface p-3 text-[11px] leading-relaxed text-muted-foreground">
             API endpoint: <span className="font-mono">{API_URL}</span>
             <br />
-            Start the local server first: <span className="font-mono">cd server &amp;&amp; npm start</span>
+            Start the local server first:{" "}
+            <span className="font-mono">cd server &amp;&amp; npm start</span>
             <br />
-            Default credentials: <span className="font-mono">admin / admin123</span>
+            Configure initial admin credentials in the server environment before first login.
           </div>
         </div>
       </div>

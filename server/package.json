@@ -8,7 +8,8 @@
     "init-db": "node src/init-db.js",
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "backup": "node src/backup.js"
+    "backup": "node src/backup.js",
+    "test": "node --test src/accounting-core.test.js src/phase4-logic.test.js src/erp-flow.test.js src/restore.test.js src/final-scenario.test.js src/erp-extended.test.js"
   },
   "dependencies": {
     "better-sqlite3": "^11.5.0",

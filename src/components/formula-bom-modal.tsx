@@ -31,7 +31,7 @@ type FactoryItem = {
 };
 
 type FormulaLine = {
-  id?: number;
+  id: number | undefined;
   factory_item_id: number | null;
   material_name: string;
   value: number;
@@ -39,9 +39,14 @@ type FormulaLine = {
   cost_value: number;
 };
 
+type FormulaResponse = {
+  formula: { code?: string } | null;
+  lines: FormulaLine[];
+};
+
 type FormulaBomModalProps = {
   particular: Particular | null;
-  itemName?: string;
+  itemName?: string | undefined;
   factoryItems: FactoryItem[];
   onClose: () => void;
 };
@@ -58,7 +63,7 @@ export default function FormulaBomModal({
   const [error, setError] = useState("");
 
   async function loadFormula(particularRow: Particular) {
-    const payload = await apiGet<{ formula: any; lines: FormulaLine[] }>(`/formulas/${particularRow.id}`);
+    const payload = await apiGet<FormulaResponse>(`/formulas/${particularRow.id}`);
     if (payload.formula) {
       setFormulaCode(payload.formula.code ?? "");
     } else {
@@ -100,7 +105,7 @@ export default function FormulaBomModal({
         })),
       };
 
-      const result = await apiPost<{ formula: any; lines: FormulaLine[] }>(`/formulas/${particular.id}`, payload);
+      const result = await apiPost<FormulaResponse>(`/formulas/${particular.id}`, payload);
       if (result.lines) {
         setFormulaLines(
           result.lines.map((line) => ({
@@ -122,14 +127,17 @@ export default function FormulaBomModal({
   }
 
   const totalCost = useMemo(
-    () => formulaLines.reduce((sum, line) => sum + Number(line.value || 0) * Number(line.rate || 0), 0),
+    () =>
+      formulaLines.reduce((sum, line) => sum + Number(line.value || 0) * Number(line.rate || 0), 0),
     [formulaLines],
   );
 
   useEffect(() => {
     if (!particular) return;
     setError("");
-    void loadFormula(particular).catch((err) => setError(err instanceof Error ? err.message : "Unable to load formula"));
+    void loadFormula(particular).catch((err) =>
+      setError(err instanceof Error ? err.message : "Unable to load formula"),
+    );
   }, [particular]);
 
   if (!particular) return null;
@@ -159,7 +167,11 @@ export default function FormulaBomModal({
         </div>
 
         <div className="mt-4">
-          {error && <div className="mb-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>}
+          {error && (
+            <div className="mb-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {error}
+            </div>
+          )}
           <div className="grid grid-cols-[140px_1fr] items-center gap-2">
             <label className="text-xs font-medium">Formula Code</label>
             <input
@@ -195,7 +207,14 @@ export default function FormulaBomModal({
                             const factory = factoryItems.find((f) => f.id === id);
                             setFormulaLines((cur) =>
                               cur.map((it, i) =>
-                                i === idx ? { ...it, factory_item_id: id, material_name: factory?.name ?? "", rate: factory?.rate ?? 0 } : it,
+                                i === idx
+                                  ? {
+                                      ...it,
+                                      factory_item_id: id,
+                                      material_name: factory?.name ?? "",
+                                      rate: factory?.rate ?? 0,
+                                    }
+                                  : it,
                               ),
                             );
                           }}
@@ -217,7 +236,9 @@ export default function FormulaBomModal({
                             const val = Number(e.target.value || 0);
                             setFormulaLines((cur) =>
                               cur.map((it, i) =>
-                                i === idx ? { ...it, value: val, cost_value: val * Number(it.rate || 0) } : it,
+                                i === idx
+                                  ? { ...it, value: val, cost_value: val * Number(it.rate || 0) }
+                                  : it,
                               ),
                             );
                           }}
@@ -232,7 +253,9 @@ export default function FormulaBomModal({
                             const rate = Number(e.target.value || 0);
                             setFormulaLines((cur) =>
                               cur.map((it, i) =>
-                                i === idx ? { ...it, rate, cost_value: Number(it.value || 0) * rate } : it,
+                                i === idx
+                                  ? { ...it, rate, cost_value: Number(it.value || 0) * rate }
+                                  : it,
                               ),
                             );
                           }}
@@ -258,7 +281,14 @@ export default function FormulaBomModal({
                 onClick={() =>
                   setFormulaLines((cur) => [
                     ...cur,
-                    { factory_item_id: null, material_name: "", value: 0, rate: 0, cost_value: 0 },
+                    {
+                      id: undefined,
+                      factory_item_id: null,
+                      material_name: "",
+                      value: 0,
+                      rate: 0,
+                      cost_value: 0,
+                    },
                   ])
                 }
               >
@@ -270,7 +300,9 @@ export default function FormulaBomModal({
           <div className="mt-4 flex items-center justify-between border-t border-border pt-3">
             <div className="text-sm font-medium">Totals</div>
             <div className="flex gap-8 text-sm">
-              <span>Value: {formulaLines.reduce((sum, line) => sum + Number(line.value || 0), 0)}</span>
+              <span>
+                Value: {formulaLines.reduce((sum, line) => sum + Number(line.value || 0), 0)}
+              </span>
               <span>Cost Value: {totalCost}</span>
             </div>
           </div>

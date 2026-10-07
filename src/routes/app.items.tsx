@@ -132,13 +132,20 @@ function ItemsPage() {
     setParticulars((cur) => [...cur, row]);
   }
 
-  async function updateParticular(row: Particular, field: keyof Particular, value: string | number) {
+  async function updateParticular(
+    row: Particular,
+    field: keyof Particular,
+    value: string | number,
+  ) {
     if (!selectedItem) return;
     const payload = {
       ...row,
       [field]: value,
     };
-    const updated = await apiPut<Particular>(`/items/${selectedItem.id}/particulars/${row.id}`, payload);
+    const updated = await apiPut<Particular>(
+      `/items/${selectedItem.id}/particulars/${row.id}`,
+      payload,
+    );
     setParticulars((cur) => cur.map((r) => (r.id === updated.id ? updated : r)));
   }
 
@@ -165,13 +172,21 @@ function ItemsPage() {
           <p className="text-sm text-muted-foreground">Items and Formula / BOM</p>
         </div>
         <div className="flex gap-2">
-          <button className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60" onClick={() => void runAction(addItem)} disabled={loading}>
+          <button
+            className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
+            onClick={() => void runAction(addItem)}
+            disabled={loading}
+          >
             <Plus className="h-4 w-4" /> Add Item
           </button>
         </div>
       </div>
 
-      {error && <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>}
+      {error && (
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {error}
+        </div>
+      )}
       {loading && <div className="text-sm text-muted-foreground">Loading items...</div>}
       <section className="grid flex-1 grid-cols-[320px_minmax(620px,1fr)] gap-4 overflow-hidden rounded-md border border-border bg-card">
         <aside className="border-r border-border bg-card p-3">
@@ -182,14 +197,35 @@ function ItemsPage() {
           <div className="max-h-full overflow-y-auto">
             {items.length === 0 && <div className="text-sm text-muted-foreground">No items</div>}
             {items.map((item) => (
-              <div key={item.id} className={cn("mb-2 cursor-pointer rounded-md border p-3 transition", selectedItem?.id === item.id ? "border-teal-500 bg-teal-50/20" : "border-border hover:bg-accent")}
-                onClick={() => void runAction(async () => { setSelectedItem(item); await loadParticulars(item.id); })}>
+              <div
+                key={item.id}
+                className={cn(
+                  "mb-2 cursor-pointer rounded-md border p-3 transition",
+                  selectedItem?.id === item.id
+                    ? "border-teal-500 bg-teal-50/20"
+                    : "border-border hover:bg-accent",
+                )}
+                onClick={() =>
+                  void runAction(async () => {
+                    setSelectedItem(item);
+                    await loadParticulars(item.id);
+                  })
+                }
+              >
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-sm font-semibold text-foreground">{item.name}</div>
                     <div className="text-[11px] text-muted-foreground">{item.code}</div>
                   </div>
-                    <button className="text-xs text-destructive" onClick={(e) => { e.stopPropagation(); void runAction(() => deleteItem(item)); }}>Delete</button>
+                  <button
+                    className="text-xs text-destructive"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void runAction(() => deleteItem(item));
+                    }}
+                  >
+                    Delete
+                  </button>
                 </div>
               </div>
             ))}
@@ -204,7 +240,10 @@ function ItemsPage() {
                   <div className="text-lg font-semibold">{selectedItem.name}</div>
                   <div className="text-xs text-muted-foreground">{selectedItem.code}</div>
                 </div>
-                <button className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-accent" onClick={() => void runAction(addParticular)}>
+                <button
+                  className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-accent"
+                  onClick={() => void runAction(addParticular)}
+                >
                   <Plus className="h-4 w-4" /> Add Particular
                 </button>
               </div>
@@ -212,45 +251,165 @@ function ItemsPage() {
               <div className="flex-1 overflow-auto">
                 <table className="min-w-full text-sm">
                   <thead className="sticky top-0 bg-muted/40">
-                  <tr className="text-left">
-                    <th className="px-3 py-2">Sr</th>
-                    <th className="px-3 py-2">Type</th>
-                    <th className="px-3 py-2">Weight/Unit</th>
-                    <th className="px-3 py-2">Cost Price</th>
-                    <th className="px-3 py-2">WS Price</th>
-                    <th className="px-3 py-2">Sale Price</th>
-                    <th className="px-3 py-2">Stock</th>
-                    <th className="px-3 py-2">Min</th>
-                    <th className="px-3 py-2">Max</th>
-                    <th className="px-3 py-2">F.Code</th>
-                    <th className="px-3 py-2">Formula</th>
-                    <th className="px-3 py-2">Action</th>
-                  </tr>
+                    <tr className="text-left">
+                      <th className="px-3 py-2">Sr</th>
+                      <th className="px-3 py-2">Type</th>
+                      <th className="px-3 py-2">Weight/Unit</th>
+                      <th className="px-3 py-2">Cost Price</th>
+                      <th className="px-3 py-2">WS Price</th>
+                      <th className="px-3 py-2">Sale Price</th>
+                      <th className="px-3 py-2">Stock</th>
+                      <th className="px-3 py-2">Min</th>
+                      <th className="px-3 py-2">Max</th>
+                      <th className="px-3 py-2">F.Code</th>
+                      <th className="px-3 py-2">Formula</th>
+                      <th className="px-3 py-2">Action</th>
+                    </tr>
                   </thead>
                   <tbody>
-                  {particulars.length === 0 && <tr><td colSpan={12} className="px-3 py-8 text-center text-sm text-muted-foreground">No particulars have been added for this item yet.</td></tr>}
-                  {particulars.map((row, idx) => (
-                    <tr key={row.id} className="border-t border-border">
-                      <td className="px-3 py-2 text-center">{idx + 1}</td>
-                      <td className="px-3 py-2"><input className="w-24 rounded-md border px-2 py-1" value={row.type} onChange={(e) => void runAction(() => updateParticular(row, "type", e.target.value))} /></td>
-                      <td className="px-3 py-2"><input className="w-24 rounded-md border px-2 py-1" value={row.weight_unit} onChange={(e) => void runAction(() => updateParticular(row, "weight_unit", e.target.value))} /></td>
-                      <td className="px-3 py-2"><input className="w-24 rounded-md border px-2 py-1" value={row.cost_price} type="number" onChange={(e) => void runAction(() => updateParticular(row, "cost_price", Number(e.target.value)))} /></td>
-                      <td className="px-3 py-2"><input className="w-24 rounded-md border px-2 py-1" value={row.ws_price} type="number" onChange={(e) => void runAction(() => updateParticular(row, "ws_price", Number(e.target.value)))} /></td>
-                      <td className="px-3 py-2"><input className="w-24 rounded-md border px-2 py-1" value={row.sale_price} type="number" onChange={(e) => void runAction(() => updateParticular(row, "sale_price", Number(e.target.value)))} /></td>
-                      <td className="px-3 py-2"><input className="w-20 rounded-md border px-2 py-1" value={row.stock_qty} type="number" onChange={(e) => void runAction(() => updateParticular(row, "stock_qty", Number(e.target.value)))} /></td>
-                      <td className="px-3 py-2"><input className="w-20 rounded-md border px-2 py-1" value={row.min_qty} type="number" onChange={(e) => void runAction(() => updateParticular(row, "min_qty", Number(e.target.value)))} /></td>
-                      <td className="px-3 py-2"><input className="w-20 rounded-md border px-2 py-1" value={row.max_qty} type="number" onChange={(e) => void runAction(() => updateParticular(row, "max_qty", Number(e.target.value)))} /></td>
-                      <td className="px-3 py-2"><input className="w-24 rounded-md border px-2 py-1" value={row.formula_code} onChange={(e) => void runAction(() => updateParticular(row, "formula_code", e.target.value))} /></td>
-                      <td className="px-3 py-2"><button className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs hover:bg-accent" onClick={() => void runAction(() => openFormula(row))}><Calculator className="h-3.5 w-3.5" />Formula</button></td>
-                      <td className="px-3 py-2"><button className="rounded-md border border-destructive px-2 py-1 text-xs text-destructive hover:bg-destructive/10" onClick={() => void runAction(() => deleteParticular(row))}><Trash2 className="h-3.5 w-3.5" /></button></td>
-                    </tr>
-                  ))}
+                    {particulars.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={12}
+                          className="px-3 py-8 text-center text-sm text-muted-foreground"
+                        >
+                          No particulars have been added for this item yet.
+                        </td>
+                      </tr>
+                    )}
+                    {particulars.map((row, idx) => (
+                      <tr key={row.id} className="border-t border-border">
+                        <td className="px-3 py-2 text-center">{idx + 1}</td>
+                        <td className="px-3 py-2">
+                          <input
+                            className="w-24 rounded-md border px-2 py-1"
+                            value={row.type}
+                            onChange={(e) =>
+                              void runAction(() => updateParticular(row, "type", e.target.value))
+                            }
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <input
+                            className="w-24 rounded-md border px-2 py-1"
+                            value={row.weight_unit}
+                            onChange={(e) =>
+                              void runAction(() =>
+                                updateParticular(row, "weight_unit", e.target.value),
+                              )
+                            }
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <input
+                            className="w-24 rounded-md border px-2 py-1"
+                            value={row.cost_price}
+                            type="number"
+                            onChange={(e) =>
+                              void runAction(() =>
+                                updateParticular(row, "cost_price", Number(e.target.value)),
+                              )
+                            }
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <input
+                            className="w-24 rounded-md border px-2 py-1"
+                            value={row.ws_price}
+                            type="number"
+                            onChange={(e) =>
+                              void runAction(() =>
+                                updateParticular(row, "ws_price", Number(e.target.value)),
+                              )
+                            }
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <input
+                            className="w-24 rounded-md border px-2 py-1"
+                            value={row.sale_price}
+                            type="number"
+                            onChange={(e) =>
+                              void runAction(() =>
+                                updateParticular(row, "sale_price", Number(e.target.value)),
+                              )
+                            }
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <input
+                            className="w-20 rounded-md border px-2 py-1"
+                            value={row.stock_qty}
+                            type="number"
+                            onChange={(e) =>
+                              void runAction(() =>
+                                updateParticular(row, "stock_qty", Number(e.target.value)),
+                              )
+                            }
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <input
+                            className="w-20 rounded-md border px-2 py-1"
+                            value={row.min_qty}
+                            type="number"
+                            onChange={(e) =>
+                              void runAction(() =>
+                                updateParticular(row, "min_qty", Number(e.target.value)),
+                              )
+                            }
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <input
+                            className="w-20 rounded-md border px-2 py-1"
+                            value={row.max_qty}
+                            type="number"
+                            onChange={(e) =>
+                              void runAction(() =>
+                                updateParticular(row, "max_qty", Number(e.target.value)),
+                              )
+                            }
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <input
+                            className="w-24 rounded-md border px-2 py-1"
+                            value={row.formula_code}
+                            onChange={(e) =>
+                              void runAction(() =>
+                                updateParticular(row, "formula_code", e.target.value),
+                              )
+                            }
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <button
+                            className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs hover:bg-accent"
+                            onClick={() => void runAction(() => openFormula(row))}
+                          >
+                            <Calculator className="h-3.5 w-3.5" />
+                            Formula
+                          </button>
+                        </td>
+                        <td className="px-3 py-2">
+                          <button
+                            className="rounded-md border border-destructive px-2 py-1 text-xs text-destructive hover:bg-destructive/10"
+                            onClick={() => void runAction(() => deleteParticular(row))}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
             </>
           ) : (
-            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">No item selected</div>
+            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+              No item selected
+            </div>
           )}
         </section>
       </section>

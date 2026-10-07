@@ -11,7 +11,8 @@ export function calculateProductionRequirements(formulaLines, batchQty, batchSiz
   const lines = (formulaLines || []).map((line) => {
     const value = finiteNumber(line?.value, 0);
     const rate = finiteNumber(line?.rate, 0);
-    const qtyRequired = Number.isFinite(value) && Number.isFinite(multiplier) ? value * multiplier : 0;
+    const qtyRequired =
+      Number.isFinite(value) && Number.isFinite(multiplier) ? value * multiplier : 0;
     const amount = Number.isFinite(qtyRequired) && Number.isFinite(rate) ? qtyRequired * rate : 0;
 
     return {
