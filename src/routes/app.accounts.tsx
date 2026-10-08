@@ -541,14 +541,16 @@ function AccountsPage() {
         <TabsContent value="receipts" className="space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-base font-semibold">Customer Receipts Register</h2>
-            <Button
-              size="sm"
-              disabled={!canPost}
-              onClick={() => setShowReceiptForm(!showReceiptForm)}
-            >
-              {showReceiptForm ? <X className="h-4 w-4 mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
-              {showReceiptForm ? "Cancel" : "New Receipt"}
-            </Button>
+            {canPost && (
+              <Button size="sm" onClick={() => setShowReceiptForm(!showReceiptForm)}>
+                {showReceiptForm ? (
+                  <X className="h-4 w-4 mr-1" />
+                ) : (
+                  <Plus className="h-4 w-4 mr-1" />
+                )}
+                {showReceiptForm ? "Cancel" : "New Receipt"}
+              </Button>
+            )}
           </div>
 
           {showReceiptForm && (
@@ -730,14 +732,16 @@ function AccountsPage() {
         <TabsContent value="payments" className="space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-base font-semibold">Supplier Payments Register</h2>
-            <Button
-              size="sm"
-              disabled={!canPost}
-              onClick={() => setShowPaymentForm(!showPaymentForm)}
-            >
-              {showPaymentForm ? <X className="h-4 w-4 mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
-              {showPaymentForm ? "Cancel" : "New Payment"}
-            </Button>
+            {canPost && (
+              <Button size="sm" onClick={() => setShowPaymentForm(!showPaymentForm)}>
+                {showPaymentForm ? (
+                  <X className="h-4 w-4 mr-1" />
+                ) : (
+                  <Plus className="h-4 w-4 mr-1" />
+                )}
+                {showPaymentForm ? "Cancel" : "New Payment"}
+              </Button>
+            )}
           </div>
 
           {showPaymentForm && (
@@ -1219,14 +1223,16 @@ function AccountsPage() {
         <TabsContent value="journals" className="space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-base font-semibold">General Journal Vouchers</h2>
-            <Button
-              size="sm"
-              disabled={!canPost}
-              onClick={() => setShowJournalForm(!showJournalForm)}
-            >
-              {showJournalForm ? <X className="h-4 w-4 mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
-              {showJournalForm ? "Cancel" : "New Journal Voucher"}
-            </Button>
+            {canPost && (
+              <Button size="sm" onClick={() => setShowJournalForm(!showJournalForm)}>
+                {showJournalForm ? (
+                  <X className="h-4 w-4 mr-1" />
+                ) : (
+                  <Plus className="h-4 w-4 mr-1" />
+                )}
+                {showJournalForm ? "Cancel" : "New Journal Voucher"}
+              </Button>
+            )}
           </div>
 
           {showJournalForm && (

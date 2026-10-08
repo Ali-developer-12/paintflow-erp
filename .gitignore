@@ -50,3 +50,6 @@ server/data/
 # generated output artifacts
 *_output.txt
 
+# Playwright output
+/test-results/
+/playwright-report/

@@ -40,6 +40,7 @@ function CounterSalePage() {
   const [customerId, setCustomerId] = useState<string>("");
   const [lines, setLines] = useState<SaleLine[]>([]);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     void (async () => {
@@ -106,8 +107,9 @@ function CounterSalePage() {
   }
 
   async function saveSale() {
+    setError("");
     if (!customerId || !lines.some((line) => line.particular_id && line.qty > 0)) {
-      alert("Select a customer and at least one valid sale line.");
+      setError("Select a customer and at least one valid sale line.");
       return;
     }
 
@@ -134,6 +136,8 @@ function CounterSalePage() {
           },
         ]);
       }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save sale");
     } finally {
       setSaving(false);
     }
@@ -144,6 +148,15 @@ function CounterSalePage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Counter Sale</h1>
       </div>
+
+      {error && (
+        <div
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+        >
+          {error}
+        </div>
+      )}
 
       <div className="rounded-md border border-border bg-card p-5">
         <div className="grid gap-4 md:grid-cols-2">
