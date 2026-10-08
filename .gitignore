@@ -46,3 +46,7 @@ server/data/
 *.sln
 *.sw?
 *.local
+
+# generated output artifacts
+*_output.txt
+

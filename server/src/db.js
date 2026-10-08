@@ -2,14 +2,14 @@ import Database from "better-sqlite3";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { DATA_DIR, DB_PATH, BUSY_TIMEOUT_MS } from "./config.js";
+import { DATA_DIR, DB_PATH, BUSY_TIMEOUT_MS, ensureRuntimeDirs } from "./config.js";
 import { logger } from "./logger.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export { DATA_DIR, DB_PATH };
 
-fs.mkdirSync(DATA_DIR, { recursive: true });
+ensureRuntimeDirs();
 
 export const db = new Database(DB_PATH);
 db.pragma("journal_mode = WAL");

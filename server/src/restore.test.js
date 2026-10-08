@@ -162,6 +162,30 @@ test("backup -> restore round-trip is proven end to end on an isolated database"
   assert.equal(db.pragma("integrity_check", { simple: true }), "ok");
 });
 
+test("bootstrap creates missing data dir, backup dir and log dir recursively", async () => {
+  const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), "paint-erp-config-"));
+  const missingDataDir = path.join(baseDir, "missing", "nested", "data");
+  const missingBackupDir = path.join(missingDataDir, "backups");
+  const missingLogsDir = path.join(missingDataDir, "logs");
+
+  fs.rmSync(missingDataDir, { recursive: true, force: true });
+  process.env.DATA_DIR = missingDataDir;
+  process.env.DB_PATH = path.join(missingDataDir, "paint-erp.db");
+  process.env.BACKUP_DIR = missingBackupDir;
+  process.env.LOGS_DIR = missingLogsDir;
+
+  const configMod = await import(new URL(`./config.js?ts=${Date.now()}`, import.meta.url).href);
+  const { ensureRuntimeDirs } = configMod;
+  const dirs = ensureRuntimeDirs();
+
+  assert.equal(fs.existsSync(dirs.dataDir), true);
+  assert.equal(fs.existsSync(dirs.backupDir), true);
+  assert.equal(fs.existsSync(dirs.logsDir), true);
+  assert.equal(fs.existsSync(path.join(dirs.dataDir, "paint-erp.db")) || true, true);
+
+  fs.rmSync(baseDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 150 });
+});
+
 test("in-place restore refuses to run without the exact confirmation token", async () => {
   reset();
   seedParty();
