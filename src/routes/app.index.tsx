@@ -96,7 +96,8 @@ function Dashboard() {
 
       {!isLoading && !hasData && (
         <div className="rounded-lg border border-dashed border-border bg-card p-6 text-sm text-muted-foreground">
-          No factory data yet. Add your first supplier, raw material, or sale to start tracking the production cycle.
+          No factory data yet. Add your first supplier, raw material, or sale to start tracking the
+          production cycle.
         </div>
       )}
     </div>

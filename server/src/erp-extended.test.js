@@ -20,6 +20,7 @@ let dataDir;
 let dbFile;
 let adminToken;
 let userToken;
+let accountantToken;
 let customerId;
 let supplierId;
 let rawItemId;
@@ -111,6 +112,22 @@ before(async () => {
   assert.equal(loginUser.status, 200);
   userToken = loginUser.json.token;
 
+  const createAccountant = await api("POST", "/users", {
+    username: "extaccountant",
+    password: "ExtAccountant123!",
+    role: "accountant",
+    full_name: "Accountant",
+  });
+  assert.equal(createAccountant.status, 201);
+  const loginAccountant = await api(
+    "POST",
+    "/auth/login",
+    { username: "extaccountant", password: "ExtAccountant123!" },
+    null,
+  );
+  assert.equal(loginAccountant.status, 200);
+  accountantToken = loginAccountant.json.token;
+
   // Setup seed customer & supplier
   const cusRes = await api("POST", "/setup/customers", {
     name: "Al-Rehman Paints",
@@ -197,9 +214,12 @@ test("CUSTOMER RECEIPT: posts balanced double-entry voucher, reduces party balan
     amount: receiptAmount,
     reference_no: "CHQ-1001",
     remarks: "Advance payment against order",
+    total_amount: 999999,
+    net_total: 999999,
   });
 
   assert.equal(res.status, 201, `Receipt creation failed: ${JSON.stringify(res.json)}`);
+  assert.equal(Number(res.json.amount), receiptAmount);
   assert.ok(res.json.id > 0);
   assert.match(res.json.voucher_no, /^RCP-\d+$/);
 
@@ -238,7 +258,10 @@ test("CUSTOMER RECEIPT: posts balanced double-entry voucher, reduces party balan
   assert.ok(listRes.json.some((r) => r.id === res.json.id));
 
   // Verify statement reflects the receipt
-  const stmtRes = await api("GET", `/reports/statements?party_type=customer&party_id=${customerId}`);
+  const stmtRes = await api(
+    "GET",
+    `/reports/statements?party_type=customer&party_id=${customerId}`,
+  );
   assert.equal(stmtRes.status, 200);
   assert.equal(stmtRes.json.closing_balance, 1000 - receiptAmount); // Opening 1000 - 450 = 550
 });
@@ -282,9 +305,12 @@ test("SUPPLIER PAYMENT: posts balanced double-entry voucher, reduces payable bal
     amount: paymentAmount,
     reference_no: "TRF-909",
     remarks: "Raw material invoice partial payment",
+    total_amount: 999999,
+    net_total: 999999,
   });
 
   assert.equal(res.status, 201, `Payment failed: ${JSON.stringify(res.json)}`);
+  assert.equal(Number(res.json.amount), paymentAmount);
   assert.ok(res.json.id > 0);
   assert.match(res.json.voucher_no, /^PMT-\d+$/);
 
@@ -320,7 +346,10 @@ test("SUPPLIER PAYMENT: posts balanced double-entry voucher, reduces payable bal
   assert.ok(listRes.json.some((p) => p.id === res.json.id));
 
   // Verify statement reflects the payment
-  const stmtRes = await api("GET", `/reports/statements?party_type=supplier&party_id=${supplierId}`);
+  const stmtRes = await api(
+    "GET",
+    `/reports/statements?party_type=supplier&party_id=${supplierId}`,
+  );
   assert.equal(stmtRes.status, 200);
   assert.equal(stmtRes.json.closing_balance, 2000 - paymentAmount); // Opening 2000 - 800 = 1200
 });
@@ -521,6 +550,14 @@ test("USER MANAGEMENT: admin creates, updates, resets password, protects last ad
   assert.equal(newUserRes.status, 201);
   const newUserId = newUserRes.json.id;
 
+  const oldCashierSession = await api(
+    "POST",
+    "/auth/login",
+    { username: "cashier1", password: "CashierSecret123!" },
+    null,
+  );
+  assert.equal(oldCashierSession.status, 200);
+
   // Admin resets cashier password
   const resetRes = await api(
     "POST",
@@ -529,6 +566,7 @@ test("USER MANAGEMENT: admin creates, updates, resets password, protects last ad
     adminToken,
   );
   assert.equal(resetRes.status, 200);
+  assert.equal((await api("GET", "/auth/me", undefined, oldCashierSession.json.token)).status, 401);
 
   // Cashier can login with new password
   const cashierLogin = await api(
@@ -543,12 +581,7 @@ test("USER MANAGEMENT: admin creates, updates, resets password, protects last ad
   const allAdmins = userList.json.filter((u) => u.role === "admin" && u.is_active === 1);
   assert.equal(allAdmins.length, 1, "Only 1 active admin exists initially in test");
 
-  const demoteAdmin = await api(
-    "PUT",
-    `/users/${allAdmins[0].id}`,
-    { role: "user" },
-    adminToken,
-  );
+  const demoteAdmin = await api("PUT", `/users/${allAdmins[0].id}`, { role: "user" }, adminToken);
   assert.equal(demoteAdmin.status, 400);
   assert.match(demoteAdmin.json.error, /last active administrator/i);
 
@@ -607,4 +640,211 @@ test("FINANCIAL REPORTS & DIAGNOSTICS: produce correct financial statements", as
   assert.equal(diagRes.json.database.integrity_check, "ok");
   assert.equal(diagRes.json.database.foreign_key_violations, 0);
   assert.equal(diagRes.json.accounting.trial_balance_balanced, true);
+});
+
+test("API responses are not cached and foreign origins receive no CORS grant", async () => {
+  const response = await fetch(`${BASE}/health`, {
+    headers: { Origin: "https://untrusted.example" },
+  });
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("access-control-allow-origin"), null);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+});
+
+test("per-username login lockout audits failed and blocked attempts", async () => {
+  const username = "missing-lockout-user";
+  for (let failure = 0; failure < 5; failure += 1) {
+    const result = await api("POST", "/auth/login", { username, password: "wrong-password" }, null);
+    assert.equal(result.status, 401);
+  }
+  const blocked = await api("POST", "/auth/login", { username, password: "wrong-password" }, null);
+  assert.equal(blocked.status, 429);
+
+  const conn = readDb();
+  try {
+    const audit = conn
+      .prepare("SELECT action FROM audit_log WHERE username = ? ORDER BY id DESC LIMIT 6")
+      .all(username)
+      .map((row) => row.action);
+    assert.equal(audit.filter((action) => action === "LOGIN_FAILED").length, 5);
+    assert.equal(audit[0], "LOGIN_LOCKED");
+  } finally {
+    conn.close();
+  }
+});
+
+test("password change retains the current session and invalidates other sessions", async () => {
+  const secondSession = await api(
+    "POST",
+    "/auth/login",
+    { username: REGULAR_USER, password: REGULAR_PASS },
+    null,
+  );
+  assert.equal(secondSession.status, 200);
+
+  const changed = await api(
+    "POST",
+    "/auth/change-password",
+    { current_password: REGULAR_PASS, new_password: "ChangedUserPass123!" },
+    userToken,
+  );
+  assert.equal(changed.status, 200);
+  assert.equal((await api("GET", "/auth/me", undefined, userToken)).status, 200);
+  assert.equal((await api("GET", "/auth/me", undefined, secondSession.json.token)).status, 401);
+});
+
+test("shared request validation rejects invalid numeric payloads", async () => {
+  const invalidString = await api("POST", "/items", { name: "Bad item", rate: "NaN" });
+  assert.equal(invalidString.status, 400);
+  assert.match(invalidString.json.error, /valid number/i);
+
+  const negative = await api("POST", "/items", { name: "Bad item", stock_qty: -1 });
+  assert.equal(negative.status, 400);
+});
+
+let accountantManagedItemId;
+let accountantManagedParticularId;
+
+test("POST /items permits accountants and rejects users", async () => {
+  assert.equal((await api("POST", "/items", { name: "Accountant item" }, userToken)).status, 403);
+  const result = await api("POST", "/items", { name: "Accountant item" }, accountantToken);
+  assert.equal(result.status, 201, JSON.stringify(result.json));
+  accountantManagedItemId = result.json.id;
+});
+
+test("PUT /items/:id permits accountants and rejects users", async () => {
+  const body = { name: "Accountant item updated", category: "Emulsion", remarks: "" };
+  assert.equal(
+    (await api("PUT", `/items/${accountantManagedItemId}`, body, userToken)).status,
+    403,
+  );
+  assert.equal(
+    (await api("PUT", `/items/${accountantManagedItemId}`, body, accountantToken)).status,
+    200,
+  );
+});
+
+test("POST /items/:id/particulars permits accountants and rejects users", async () => {
+  const body = { type: "Can", weight_unit: "1 L", cost_price: 3, sale_price: 5 };
+  assert.equal(
+    (await api("POST", `/items/${accountantManagedItemId}/particulars`, body, userToken)).status,
+    403,
+  );
+  const result = await api(
+    "POST",
+    `/items/${accountantManagedItemId}/particulars`,
+    body,
+    accountantToken,
+  );
+  assert.equal(result.status, 201, JSON.stringify(result.json));
+  accountantManagedParticularId = result.json.id;
+});
+
+test("PUT /items/:id/particulars/:particularId permits accountants and rejects users", async () => {
+  const body = {
+    type: "Updated Can",
+    weight_unit: "1 L",
+    cost_price: 4,
+    ws_price: 5,
+    sale_price: 6,
+    stock_qty: 0,
+    min_qty: 0,
+    max_qty: 0,
+    formula_code: "",
+  };
+  const endpoint = `/items/${accountantManagedItemId}/particulars/${accountantManagedParticularId}`;
+  assert.equal((await api("PUT", endpoint, body, userToken)).status, 403);
+  assert.equal((await api("PUT", endpoint, body, accountantToken)).status, 200);
+});
+
+test("POST /formulas/:particularId permits accountants and rejects users", async () => {
+  const body = {
+    code: "ROLE-TEST",
+    batch_size: 1,
+    lines: [{ factory_item_id: rawItemId, material_name: "Raw material", value: 1, rate: 2 }],
+  };
+  const endpoint = `/formulas/${accountantManagedParticularId}`;
+  assert.equal((await api("POST", endpoint, body, userToken)).status, 403);
+  assert.equal((await api("POST", endpoint, body, accountantToken)).status, 200);
+});
+
+test("DELETE /items/:id permits admins and rejects users", async () => {
+  const item = await api("POST", "/items", { name: "Admin-only delete" }, accountantToken);
+  assert.equal(item.status, 201);
+  assert.equal((await api("DELETE", `/items/${item.json.id}`, undefined, userToken)).status, 403);
+  assert.equal((await api("DELETE", `/items/${item.json.id}`, undefined, adminToken)).status, 200);
+});
+
+test("DELETE /items/:id/particulars/:particularId permits admins and rejects users", async () => {
+  const endpoint = `/items/${accountantManagedItemId}/particulars/${accountantManagedParticularId}`;
+  assert.equal((await api("DELETE", endpoint, undefined, userToken)).status, 403);
+  assert.equal((await api("DELETE", endpoint, undefined, adminToken)).status, 200);
+});
+
+test("POST /receipts permits accountants and rejects users", async () => {
+  const body = {
+    customer_id: customerId,
+    date: "2026-10-05",
+    payment_account_id: cashAccountId,
+    amount: 1,
+  };
+  assert.equal((await api("POST", "/receipts", body, userToken)).status, 403);
+  assert.equal((await api("POST", "/receipts", body, accountantToken)).status, 201);
+});
+
+test("POST /payments permits accountants and rejects users", async () => {
+  const body = {
+    supplier_id: supplierId,
+    date: "2026-10-05",
+    payment_account_id: cashAccountId,
+    amount: 1,
+  };
+  assert.equal((await api("POST", "/payments", body, userToken)).status, 403);
+  assert.equal((await api("POST", "/payments", body, accountantToken)).status, 201);
+});
+
+test("POST /expenses permits accountants and rejects users", async () => {
+  const body = {
+    expense_account_id: expenseAccountId,
+    payment_account_id: cashAccountId,
+    date: "2026-10-05",
+    amount: 1,
+  };
+  assert.equal((await api("POST", "/expenses", body, userToken)).status, 403);
+  assert.equal((await api("POST", "/expenses", body, accountantToken)).status, 201);
+});
+
+test("POST /income permits accountants and rejects users", async () => {
+  const body = {
+    income_account_id: incomeAccountId,
+    payment_account_id: cashAccountId,
+    date: "2026-10-05",
+    amount: 1,
+  };
+  assert.equal((await api("POST", "/income", body, userToken)).status, 403);
+  assert.equal((await api("POST", "/income", body, accountantToken)).status, 201);
+});
+
+test("POST /journals permits accountants and rejects users", async () => {
+  const body = {
+    date: "2026-10-05",
+    lines: [
+      { account_id: cashAccountId, debit: 1, credit: 0 },
+      { account_id: expenseAccountId, debit: 0, credit: 1 },
+    ],
+  };
+  assert.equal((await api("POST", "/journals", body, userToken)).status, 403);
+  assert.equal((await api("POST", "/journals", body, accountantToken)).status, 201);
+});
+
+test("POST /stock/adjustments permits accountants and rejects users", async () => {
+  const body = {
+    item_type: "raw",
+    factory_item_id: rawItemId,
+    date: "2026-10-05",
+    adjustment_qty: 1,
+    reason: "Role authorization test",
+  };
+  assert.equal((await api("POST", "/stock/adjustments", body, userToken)).status, 403);
+  assert.equal((await api("POST", "/stock/adjustments", body, accountantToken)).status, 201);
 });

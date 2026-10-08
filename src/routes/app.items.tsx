@@ -4,6 +4,7 @@ import { Calculator, Plus, Trash2 } from "lucide-react";
 import { apiDelete, apiGet, apiPost, apiPut } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import FormulaBomModal from "@/components/formula-bom-modal";
+import { useAuth } from "@/lib/auth";
 
 type Item = {
   id: number;
@@ -46,6 +47,9 @@ export const Route = createFileRoute("/app/items")({
 });
 
 function ItemsPage() {
+  const { user } = useAuth();
+  const canManage = user?.role === "admin" || user?.role === "accountant";
+  const isAdmin = user?.role === "admin";
   const [items, setItems] = useState<Item[]>([]);
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [particulars, setParticulars] = useState<Particular[]>([]);
@@ -171,15 +175,17 @@ function ItemsPage() {
           <h1 className="text-2xl font-semibold tracking-tight">Items Master</h1>
           <p className="text-sm text-muted-foreground">Items and Formula / BOM</p>
         </div>
-        <div className="flex gap-2">
-          <button
-            className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
-            onClick={() => void runAction(addItem)}
-            disabled={loading}
-          >
-            <Plus className="h-4 w-4" /> Add Item
-          </button>
-        </div>
+        {canManage && (
+          <div className="flex gap-2">
+            <button
+              className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
+              onClick={() => void runAction(addItem)}
+              disabled={loading}
+            >
+              <Plus className="h-4 w-4" /> Add Item
+            </button>
+          </div>
+        )}
       </div>
 
       {error && (
@@ -217,15 +223,17 @@ function ItemsPage() {
                     <div className="text-sm font-semibold text-foreground">{item.name}</div>
                     <div className="text-[11px] text-muted-foreground">{item.code}</div>
                   </div>
-                  <button
-                    className="text-xs text-destructive"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void runAction(() => deleteItem(item));
-                    }}
-                  >
-                    Delete
-                  </button>
+                  {isAdmin && (
+                    <button
+                      className="text-xs text-destructive"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void runAction(() => deleteItem(item));
+                      }}
+                    >
+                      Delete
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -240,12 +248,14 @@ function ItemsPage() {
                   <div className="text-lg font-semibold">{selectedItem.name}</div>
                   <div className="text-xs text-muted-foreground">{selectedItem.code}</div>
                 </div>
-                <button
-                  className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-accent"
-                  onClick={() => void runAction(addParticular)}
-                >
-                  <Plus className="h-4 w-4" /> Add Particular
-                </button>
+                {canManage && (
+                  <button
+                    className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-accent"
+                    onClick={() => void runAction(addParticular)}
+                  >
+                    <Plus className="h-4 w-4" /> Add Particular
+                  </button>
+                )}
               </div>
 
               <div className="flex-1 overflow-auto">
@@ -283,6 +293,7 @@ function ItemsPage() {
                         <td className="px-3 py-2">
                           <input
                             className="w-24 rounded-md border px-2 py-1"
+                            disabled={!canManage}
                             value={row.type}
                             onChange={(e) =>
                               void runAction(() => updateParticular(row, "type", e.target.value))
@@ -292,6 +303,7 @@ function ItemsPage() {
                         <td className="px-3 py-2">
                           <input
                             className="w-24 rounded-md border px-2 py-1"
+                            disabled={!canManage}
                             value={row.weight_unit}
                             onChange={(e) =>
                               void runAction(() =>
@@ -303,6 +315,7 @@ function ItemsPage() {
                         <td className="px-3 py-2">
                           <input
                             className="w-24 rounded-md border px-2 py-1"
+                            disabled={!canManage}
                             value={row.cost_price}
                             type="number"
                             onChange={(e) =>
@@ -315,6 +328,7 @@ function ItemsPage() {
                         <td className="px-3 py-2">
                           <input
                             className="w-24 rounded-md border px-2 py-1"
+                            disabled={!canManage}
                             value={row.ws_price}
                             type="number"
                             onChange={(e) =>
@@ -327,6 +341,7 @@ function ItemsPage() {
                         <td className="px-3 py-2">
                           <input
                             className="w-24 rounded-md border px-2 py-1"
+                            disabled={!canManage}
                             value={row.sale_price}
                             type="number"
                             onChange={(e) =>
@@ -339,6 +354,7 @@ function ItemsPage() {
                         <td className="px-3 py-2">
                           <input
                             className="w-20 rounded-md border px-2 py-1"
+                            disabled={!canManage}
                             value={row.stock_qty}
                             type="number"
                             onChange={(e) =>
@@ -351,6 +367,7 @@ function ItemsPage() {
                         <td className="px-3 py-2">
                           <input
                             className="w-20 rounded-md border px-2 py-1"
+                            disabled={!canManage}
                             value={row.min_qty}
                             type="number"
                             onChange={(e) =>
@@ -363,6 +380,7 @@ function ItemsPage() {
                         <td className="px-3 py-2">
                           <input
                             className="w-20 rounded-md border px-2 py-1"
+                            disabled={!canManage}
                             value={row.max_qty}
                             type="number"
                             onChange={(e) =>
@@ -375,6 +393,7 @@ function ItemsPage() {
                         <td className="px-3 py-2">
                           <input
                             className="w-24 rounded-md border px-2 py-1"
+                            disabled={!canManage}
                             value={row.formula_code}
                             onChange={(e) =>
                               void runAction(() =>
@@ -393,12 +412,14 @@ function ItemsPage() {
                           </button>
                         </td>
                         <td className="px-3 py-2">
-                          <button
-                            className="rounded-md border border-destructive px-2 py-1 text-xs text-destructive hover:bg-destructive/10"
-                            onClick={() => void runAction(() => deleteParticular(row))}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
+                          {isAdmin && (
+                            <button
+                              className="rounded-md border border-destructive px-2 py-1 text-xs text-destructive hover:bg-destructive/10"
+                              onClick={() => void runAction(() => deleteParticular(row))}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -419,6 +440,7 @@ function ItemsPage() {
           particular={modalParticular}
           itemName={selectedItem?.name}
           factoryItems={factoryItems}
+          canEdit={canManage}
           onClose={() => setModalParticular(null)}
         />
       )}

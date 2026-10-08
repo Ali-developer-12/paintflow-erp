@@ -48,6 +48,7 @@ type FormulaBomModalProps = {
   particular: Particular | null;
   itemName?: string | undefined;
   factoryItems: FactoryItem[];
+  canEdit: boolean;
   onClose: () => void;
 };
 
@@ -55,6 +56,7 @@ export default function FormulaBomModal({
   particular,
   itemName,
   factoryItems,
+  canEdit,
   onClose,
 }: FormulaBomModalProps) {
   const [formulaLines, setFormulaLines] = useState<FormulaLine[]>([]);
@@ -156,13 +158,15 @@ export default function FormulaBomModal({
             <button className="rounded-md border px-3 py-2 text-xs" onClick={onClose}>
               Close
             </button>
-            <button
-              className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-xs text-primary-foreground disabled:opacity-70"
-              disabled={modalBusy}
-              onClick={() => void saveFormula()}
-            >
-              <Save className="h-3.5 w-3.5" /> Save
-            </button>
+            {canEdit && (
+              <button
+                className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-xs text-primary-foreground disabled:opacity-70"
+                disabled={modalBusy}
+                onClick={() => void saveFormula()}
+              >
+                <Save className="h-3.5 w-3.5" /> Save
+              </button>
+            )}
           </div>
         </div>
 
@@ -176,6 +180,7 @@ export default function FormulaBomModal({
             <label className="text-xs font-medium">Formula Code</label>
             <input
               className="rounded-md border px-2 py-1 text-sm"
+              disabled={!canEdit}
               value={formulaCode}
               onChange={(e) => setFormulaCode(e.target.value)}
               placeholder="F-001"
@@ -201,6 +206,7 @@ export default function FormulaBomModal({
                       <td className="px-3 py-2">
                         <select
                           className="w-full rounded-md border px-2 py-1"
+                          disabled={!canEdit}
                           value={line.factory_item_id ?? ""}
                           onChange={(e) => {
                             const id = Number(e.target.value);
@@ -230,6 +236,7 @@ export default function FormulaBomModal({
                       <td className="px-3 py-2">
                         <input
                           className="w-24 rounded-md border px-2 py-1"
+                          disabled={!canEdit}
                           type="number"
                           value={line.value}
                           onChange={(e) => {
@@ -247,6 +254,7 @@ export default function FormulaBomModal({
                       <td className="px-3 py-2">
                         <input
                           className="w-24 rounded-md border px-2 py-1"
+                          disabled={!canEdit}
                           type="number"
                           value={line.rate}
                           onChange={(e) => {
@@ -263,38 +271,44 @@ export default function FormulaBomModal({
                       </td>
                       <td className="px-3 py-2 font-medium">{cost}</td>
                       <td className="px-3 py-2">
-                        <button
-                          className="rounded-md border px-2 py-1 text-xs"
-                          onClick={() => setFormulaLines((cur) => cur.filter((_, i) => i !== idx))}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                        {canEdit && (
+                          <button
+                            className="rounded-md border px-2 py-1 text-xs"
+                            onClick={() =>
+                              setFormulaLines((cur) => cur.filter((_, i) => i !== idx))
+                            }
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
-            <div className="border-t border-border p-3">
-              <button
-                className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-xs"
-                onClick={() =>
-                  setFormulaLines((cur) => [
-                    ...cur,
-                    {
-                      id: undefined,
-                      factory_item_id: null,
-                      material_name: "",
-                      value: 0,
-                      rate: 0,
-                      cost_value: 0,
-                    },
-                  ])
-                }
-              >
-                <Plus className="h-3.5 w-3.5" /> Add Line
-              </button>
-            </div>
+            {canEdit && (
+              <div className="border-t border-border p-3">
+                <button
+                  className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-xs"
+                  onClick={() =>
+                    setFormulaLines((cur) => [
+                      ...cur,
+                      {
+                        id: undefined,
+                        factory_item_id: null,
+                        material_name: "",
+                        value: 0,
+                        rate: 0,
+                        cost_value: 0,
+                      },
+                    ])
+                  }
+                >
+                  <Plus className="h-3.5 w-3.5" /> Add Line
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="mt-4 flex items-center justify-between border-t border-border pt-3">

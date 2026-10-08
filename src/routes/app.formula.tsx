@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { ArrowUpRight, Calculator, ExternalLink } from "lucide-react";
 import FormulaBomModal from "@/components/formula-bom-modal";
 import { apiGet } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 
 type FactoryItem = {
   id: number;
@@ -55,6 +56,8 @@ export const Route = createFileRoute("/app/formula")({
 });
 
 function FormulaPage() {
+  const { user } = useAuth();
+  const canEdit = user?.role === "admin" || user?.role === "accountant";
   const [rows, setRows] = useState<FormulaRow[]>([]);
   const [unassigned, setUnassigned] = useState<UnassignedRow[]>([]);
   const [factoryItems, setFactoryItems] = useState<FactoryItem[]>([]);
@@ -223,6 +226,7 @@ function FormulaPage() {
         particular={modalParticular}
         itemName={modalItemName}
         factoryItems={factoryItems}
+        canEdit={canEdit}
         onClose={() => setModalParticular(null)}
       />
     </div>

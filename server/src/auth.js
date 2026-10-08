@@ -1,6 +1,15 @@
 import crypto from "node:crypto";
 import db from "./db.js";
 
+export const VALID_USER_ROLES = ["admin", "accountant", "user"];
+
+export function normalizeRole(role) {
+  const value = String(role || "user")
+    .trim()
+    .toLowerCase();
+  return VALID_USER_ROLES.includes(value) ? value : "user";
+}
+
 export function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
   const hash = crypto.scryptSync(password, salt, 64).toString("hex");
   return { hash, salt };
@@ -92,10 +101,12 @@ export function requireAuth(req, res, next) {
 }
 
 export function requireRole(...allowedRoles) {
-  const roles = new Set(allowedRoles.flatMap((role) => (typeof role === "string" ? [role] : [])));
+  const roles = new Set(
+    allowedRoles.flatMap((role) => (typeof role === "string" ? [normalizeRole(role)] : [])),
+  );
   return (req, res, next) => {
     if (!req.user) return res.status(401).json({ error: "Unauthorized" });
-    const userRole = String(req.user.role || "user");
+    const userRole = normalizeRole(req.user.role);
     if (!roles.has(userRole) && userRole !== "admin") {
       return res.status(403).json({ error: "Forbidden" });
     }

@@ -238,8 +238,12 @@ test("purchase posts a balanced voucher and raises raw stock", async () => {
     lines: [{ factory_item_id: materialId, qty: 100, rate: 60 }],
     paid_amount: 2000,
     payment_mode: "cash",
+    sub_total: 999999,
+    net_total: 999999,
   });
   assert.equal(res.status, 201, JSON.stringify(res.json));
+  assert.equal(Number(res.json.purchase.sub_total), 6000);
+  assert.equal(Number(res.json.purchase.net_total), 6000);
   assert.equal(await rawStockQty(), 100);
 
   const ledger = await api("GET", `/stock/ledger?item_id=${materialId}&stock_type=raw`);
@@ -277,6 +281,8 @@ test("counter sale deducts stock and posts receivable, sales and COGS", async ()
   const res = await api("POST", "/sales", {
     customer_id: customerId,
     lines: [{ particular_id: particularId, qty: 5, rate: 200 }],
+    sub_total: 999999,
+    net_total: 999999,
   });
   assert.equal(res.status, 201, JSON.stringify(res.json));
   assert.equal(Number(res.json.total), 1000);
@@ -314,8 +320,10 @@ test("customer return restores stock and reverses the sale value", async () => {
     return_type: "customer",
     customer_id: customerId,
     lines: [{ particular_id: particularId, qty: 1, rate: 200 }],
+    net_total: 999999,
   });
   assert.equal(res.status, 201, JSON.stringify(res.json));
+  assert.equal(Number(res.json.total), 200);
   assert.equal(await finishedStockQty(), 14);
   assertAllVouchersBalanced();
 });

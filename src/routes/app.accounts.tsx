@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
+import { useAuth } from "@/lib/auth";
 
 type Account = {
   id: number;
@@ -157,6 +158,8 @@ const formatAmount = (value: number) =>
 export const Route = createFileRoute("/app/accounts")({ component: AccountsPage });
 
 function AccountsPage() {
+  const { user } = useAuth();
+  const canPost = user?.role === "admin" || user?.role === "accountant";
   const [activeTab, setActiveTab] = useState("receipts");
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -538,7 +541,11 @@ function AccountsPage() {
         <TabsContent value="receipts" className="space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-base font-semibold">Customer Receipts Register</h2>
-            <Button size="sm" onClick={() => setShowReceiptForm(!showReceiptForm)}>
+            <Button
+              size="sm"
+              disabled={!canPost}
+              onClick={() => setShowReceiptForm(!showReceiptForm)}
+            >
               {showReceiptForm ? <X className="h-4 w-4 mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
               {showReceiptForm ? "Cancel" : "New Receipt"}
             </Button>
@@ -723,7 +730,11 @@ function AccountsPage() {
         <TabsContent value="payments" className="space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-base font-semibold">Supplier Payments Register</h2>
-            <Button size="sm" onClick={() => setShowPaymentForm(!showPaymentForm)}>
+            <Button
+              size="sm"
+              disabled={!canPost}
+              onClick={() => setShowPaymentForm(!showPaymentForm)}
+            >
               {showPaymentForm ? <X className="h-4 w-4 mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
               {showPaymentForm ? "Cancel" : "New Payment"}
             </Button>
@@ -906,7 +917,11 @@ function AccountsPage() {
         <TabsContent value="expenses" className="space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-base font-semibold">Expense Register</h2>
-            <Button size="sm" onClick={() => setShowExpenseForm(!showExpenseForm)}>
+            <Button
+              size="sm"
+              disabled={!canPost}
+              onClick={() => setShowExpenseForm(!showExpenseForm)}
+            >
               {showExpenseForm ? <X className="h-4 w-4 mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
               {showExpenseForm ? "Cancel" : "New Expense"}
             </Button>
@@ -1054,7 +1069,11 @@ function AccountsPage() {
         <TabsContent value="income" className="space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-base font-semibold">Income Register</h2>
-            <Button size="sm" onClick={() => setShowIncomeForm(!showIncomeForm)}>
+            <Button
+              size="sm"
+              disabled={!canPost}
+              onClick={() => setShowIncomeForm(!showIncomeForm)}
+            >
               {showIncomeForm ? <X className="h-4 w-4 mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
               {showIncomeForm ? "Cancel" : "New Income"}
             </Button>
@@ -1200,7 +1219,11 @@ function AccountsPage() {
         <TabsContent value="journals" className="space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-base font-semibold">General Journal Vouchers</h2>
-            <Button size="sm" onClick={() => setShowJournalForm(!showJournalForm)}>
+            <Button
+              size="sm"
+              disabled={!canPost}
+              onClick={() => setShowJournalForm(!showJournalForm)}
+            >
               {showJournalForm ? <X className="h-4 w-4 mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
               {showJournalForm ? "Cancel" : "New Journal Voucher"}
             </Button>

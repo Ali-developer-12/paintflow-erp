@@ -35,27 +35,20 @@ import { backpostReport, runBackpost, revertBackpost } from "./backpost.js";
 import { resolveBackup, restoreToNewFile } from "./restore.js";
 import { HOST, PORT, ALLOWED_ORIGINS, APP_NAME, APP_VERSION } from "./config.js";
 import { logger } from "./logger.js";
+import { recordAuditLog } from "./audit.js";
+import { sendRouteError } from "./http-errors.js";
 import { runMigrations } from "./migrations.js";
 import erpRoutes from "./erp-routes.js";
+import { finiteNumber, validateNumericPayload } from "./validation.js";
 
 applySchema();
 ensureChartOfAccounts();
 runMigrations(db);
 ensureCurrentFinancialYear();
 cleanupExpiredSessions();
+const sessionCleanupTimer = setInterval(cleanupExpiredSessions, 60 * 60 * 1000);
+sessionCleanupTimer.unref();
 ensureInitialAdminUser();
-
-function finiteNumber(value, fieldName, options = {}) {
-  const { min = Number.NEGATIVE_INFINITY, max = Number.POSITIVE_INFINITY } = options;
-  const number = Number(value ?? 0);
-  if (!Number.isFinite(number)) {
-    throw new Error(`${fieldName} must be a valid number`);
-  }
-  if (number < min || number > max) {
-    throw new Error(`${fieldName} is out of range`);
-  }
-  return number;
-}
 
 function validateFactoryMaterial(factoryItemId, label = "Factory item") {
   const id = Number(factoryItemId || 0);
@@ -116,25 +109,36 @@ app.use(
   cors({
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
-      if (ALLOWED_ORIGINS.includes(origin) || process.env.NODE_ENV !== "production") {
-        return callback(null, true);
-      }
-      return callback(null, true); // Allow dev origins seamlessly
+      if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+      return callback(null, false);
     },
     credentials: true,
   }),
 );
 
-app.use((_req, res, next) => {
+app.use((req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "SAMEORIGIN");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  if (req.path.startsWith("/api/")) res.setHeader("Cache-Control", "no-store");
   next();
 });
 
 app.use(express.json({ limit: "5mb" }));
 
+app.use("/api", (req, res, next) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (req.method !== "POST" && req.method !== "PUT") return next();
+  try {
+    validateNumericPayload(req.body);
+    next();
+  } catch (error) {
+    sendRouteError(res, error, 400, "Invalid numeric input");
+  }
+});
+
 const loginAttempts = new Map();
+const usernameLoginFailures = new Map();
 function loginRateLimiter(req, res, next) {
   const ip = req.ip || req.socket?.remoteAddress || "unknown";
   const now = Date.now();
@@ -167,9 +171,7 @@ app.get("/api/health", (_req, res) => {
 });
 
 app.get("/api/settings/company-name", requireAuth, (_req, res) => {
-  const row = db
-    .prepare("SELECT value FROM settings WHERE key = 'company_name' LIMIT 1")
-    .get();
+  const row = db.prepare("SELECT value FROM settings WHERE key = 'company_name' LIMIT 1").get();
   res.json({ company_name: row?.value ?? "Paint Factory" });
 });
 
@@ -179,19 +181,63 @@ app.post("/api/auth/login", loginRateLimiter, (req, res) => {
   if (!username || !password)
     return res.status(400).json({ error: "Username and password required" });
 
+  const normalizedUsername = String(username).trim().toLowerCase();
+  const now = Date.now();
+  const lockout = usernameLoginFailures.get(normalizedUsername);
+  if (lockout?.lockedUntil && now < lockout.lockedUntil) {
+    recordAuditLog(db, {
+      username: normalizedUsername,
+      action: "LOGIN_LOCKED",
+      entity: "auth",
+      details: { ip_address: req.ip },
+      ipAddress: req.ip,
+    });
+    return res.status(429).json({ error: "Too many failed attempts. Please try again later." });
+  }
+  if (lockout?.lockedUntil && now >= lockout.lockedUntil) {
+    usernameLoginFailures.delete(normalizedUsername);
+  }
+  const activeFailureRecord = usernameLoginFailures.get(normalizedUsername);
+  if (
+    activeFailureRecord &&
+    !activeFailureRecord.lockedUntil &&
+    now - activeFailureRecord.windowStarted >= 5 * 60 * 1000
+  ) {
+    usernameLoginFailures.delete(normalizedUsername);
+  }
+
   const user = db
-    .prepare("SELECT * FROM users WHERE username = ? AND is_active = 1")
-    .get(String(username).trim());
-  if (!user) return res.status(401).json({ error: "Invalid username or password" });
+    .prepare("SELECT * FROM users WHERE lower(username) = ? AND is_active = 1")
+    .get(normalizedUsername);
 
   let ok = false;
-  try {
-    ok = verifyPassword(password, user.password_hash, user.password_salt);
-  } catch {
-    ok = false;
+  if (user) {
+    try {
+      ok = verifyPassword(password, user.password_hash, user.password_salt);
+    } catch {
+      ok = false;
+    }
   }
-  if (!ok) return res.status(401).json({ error: "Invalid username or password" });
+  if (!ok) {
+    const previousFailures = usernameLoginFailures.get(normalizedUsername);
+    const failures = (previousFailures?.failures || 0) + 1;
+    usernameLoginFailures.set(
+      normalizedUsername,
+      failures >= 5
+        ? { failures, windowStarted: now, lockedUntil: now + 5 * 60 * 1000 }
+        : { failures, windowStarted: previousFailures?.windowStarted || now },
+    );
+    recordAuditLog(db, {
+      username: normalizedUsername,
+      action: "LOGIN_FAILED",
+      entity: "auth",
+      details: { ip_address: req.ip, failures },
+      ipAddress: req.ip,
+    });
+    return res.status(401).json({ error: "Invalid username or password" });
+  }
 
+  usernameLoginFailures.delete(normalizedUsername);
   const session = createSession(user.id);
   res.json({
     token: session.token,
@@ -522,7 +568,7 @@ app.post("/api/setup/factory-items", requireAuth, requireRole("admin"), (req, re
       .status(201)
       .json(db.prepare("SELECT * FROM factory_items WHERE id = ?").get(row.lastInsertRowid));
   } catch (error) {
-    res.status(400).json({ error: error.message || "Unable to save factory item" });
+    sendRouteError(res, error, 400, "Unable to save factory item");
   }
 });
 
@@ -555,7 +601,7 @@ app.put("/api/setup/factory-items/:id", requireAuth, requireRole("admin"), (req,
 
     res.json(db.prepare("SELECT * FROM factory_items WHERE id = ?").get(id));
   } catch (error) {
-    res.status(400).json({ error: error.message || "Unable to update factory item" });
+    sendRouteError(res, error, 400, "Unable to update factory item");
   }
 });
 
@@ -580,7 +626,7 @@ app.post("/api/setup/new-year-posting", requireAuth, requireRole("admin"), (req,
     });
     res.status(201).json(result);
   } catch (error) {
-    res.status(400).json({ error: error.message || "Unable to post the new year" });
+    sendRouteError(res, error, 400, "Unable to post the new year");
   }
 });
 
@@ -1050,7 +1096,7 @@ app.post("/api/purchases", requireAuth, (req, res) => {
 
     res.status(201).json(result);
   } catch (error) {
-    res.status(400).json({ error: error.message || "Unable to save purchase" });
+    sendRouteError(res, error, 400, "Unable to save purchase");
   }
 });
 
@@ -1260,7 +1306,7 @@ app.post("/api/productions", requireAuth, (req, res) => {
 
     res.status(201).json(result);
   } catch (error) {
-    res.status(400).json({ error: error.message || "Unable to save production" });
+    sendRouteError(res, error, 400, "Unable to save production");
   }
 });
 
@@ -1441,7 +1487,7 @@ app.post("/api/sales", requireAuth, (req, res) => {
 
     res.status(201).json(result);
   } catch (error) {
-    res.status(400).json({ error: error.message || "Unable to save sale" });
+    sendRouteError(res, error, 400, "Unable to save sale");
   }
 });
 
@@ -1546,7 +1592,7 @@ app.post("/api/issue-vouchers", requireAuth, (req, res) => {
 
     res.status(201).json(result);
   } catch (error) {
-    res.status(400).json({ error: error.message || "Unable to save issue voucher" });
+    sendRouteError(res, error, 400, "Unable to save issue voucher");
   }
 });
 
@@ -1763,7 +1809,7 @@ app.post("/api/returns", requireAuth, (req, res) => {
 
     res.status(201).json(result);
   } catch (error) {
-    res.status(400).json({ error: error.message || "Unable to save return" });
+    sendRouteError(res, error, 400, "Unable to save return");
   }
 });
 
@@ -1883,7 +1929,7 @@ app.get("/api/backup/export", requireAuth, requireRole("admin"), async (_req, re
     }
     res.download(backup.file_path, backup.file_name);
   } catch (error) {
-    res.status(500).json({ error: error.message || "Backup failed" });
+    sendRouteError(res, error, 500, "Backup failed");
   }
 });
 
@@ -1897,7 +1943,7 @@ app.get("/api/items", requireAuth, (_req, res) => {
   res.json(rows);
 });
 
-app.post("/api/items", requireAuth, (req, res) => {
+app.post("/api/items", requireAuth, requireRole("admin", "accountant"), (req, res) => {
   try {
     const { code = "", name = "", category = "", remarks = "" } = req.body || {};
     const trimmedName = String(name || "").trim();
@@ -1929,11 +1975,11 @@ app.post("/api/items", requireAuth, (req, res) => {
     const row = db.prepare("SELECT * FROM items WHERE id = ?").get(insert.lastInsertRowid);
     res.status(201).json(row);
   } catch (error) {
-    res.status(400).json({ error: error.message || "Unable to save item" });
+    sendRouteError(res, error, 400, "Unable to save item");
   }
 });
 
-app.put("/api/items/:id", requireAuth, (req, res) => {
+app.put("/api/items/:id", requireAuth, requireRole("admin", "accountant"), (req, res) => {
   try {
     const itemId = Number(req.params.id);
     const { code = "", name = "", category = "", remarks = "" } = req.body || {};
@@ -1965,11 +2011,11 @@ app.put("/api/items/:id", requireAuth, (req, res) => {
     const row = db.prepare("SELECT * FROM items WHERE id = ?").get(itemId);
     res.json(row);
   } catch (error) {
-    res.status(400).json({ error: error.message || "Unable to update item" });
+    sendRouteError(res, error, 400, "Unable to update item");
   }
 });
 
-app.delete("/api/items/:id", requireAuth, (req, res) => {
+app.delete("/api/items/:id", requireAuth, requireRole("admin"), (req, res) => {
   const itemId = Number(req.params.id);
   db.prepare("UPDATE items SET is_active = 0 WHERE id = ?").run(itemId);
   db.prepare("DELETE FROM item_particulars WHERE item_id = ?").run(itemId);
@@ -1984,42 +2030,109 @@ app.get("/api/items/:id/particulars", requireAuth, (req, res) => {
   res.json(rows);
 });
 
-app.post("/api/items/:id/particulars", requireAuth, (req, res) => {
-  try {
-    const itemId = Number(req.params.id);
-    const item = db.prepare("SELECT id FROM items WHERE id = ? AND is_active = 1").get(itemId);
-    if (!item) {
-      return res.status(404).json({ error: "Item not found" });
+app.post(
+  "/api/items/:id/particulars",
+  requireAuth,
+  requireRole("admin", "accountant"),
+  (req, res) => {
+    try {
+      const itemId = Number(req.params.id);
+      const item = db.prepare("SELECT id FROM items WHERE id = ? AND is_active = 1").get(itemId);
+      if (!item) {
+        return res.status(404).json({ error: "Item not found" });
+      }
+
+      const {
+        type = "",
+        weight_unit = "",
+        cost_price = 0,
+        ws_price = 0,
+        sale_price = 0,
+        stock_qty = 0,
+        min_qty = 0,
+        max_qty = 0,
+        formula_code = "",
+      } = req.body || {};
+
+      const costPrice = finiteNumber(cost_price, "Cost price", { min: 0 });
+      const wholesalePrice = finiteNumber(ws_price, "Wholesale price", { min: 0 });
+      const salePrice = finiteNumber(sale_price, "Sale price", { min: 0 });
+      const stockQty = finiteNumber(stock_qty, "Opening stock", { min: 0 });
+      const minQty = finiteNumber(min_qty, "Minimum stock", { min: 0 });
+      const maxQty = finiteNumber(max_qty, "Maximum stock", { min: 0 });
+      if (maxQty > 0 && maxQty < minQty) {
+        return res.status(400).json({ error: "Maximum stock cannot be lower than minimum stock" });
+      }
+
+      const insert = db
+        .prepare(
+          "INSERT INTO item_particulars (item_id, type, weight_unit, cost_price, ws_price, sale_price, stock_qty, min_qty, max_qty, formula_code, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT MAX(sort_order)+1 FROM item_particulars WHERE item_id=?), 1), datetime('now'))",
+        )
+        .run(
+          itemId,
+          String(type || "").trim(),
+          String(weight_unit || "").trim(),
+          costPrice,
+          wholesalePrice,
+          salePrice,
+          stockQty,
+          minQty,
+          maxQty,
+          String(formula_code || "").trim(),
+          itemId,
+        );
+
+      const row = db
+        .prepare("SELECT * FROM item_particulars WHERE id = ?")
+        .get(insert.lastInsertRowid);
+      res.status(201).json(row);
+    } catch (error) {
+      sendRouteError(res, error, 400, "Unable to save particular");
     }
+  },
+);
 
-    const {
-      type = "",
-      weight_unit = "",
-      cost_price = 0,
-      ws_price = 0,
-      sale_price = 0,
-      stock_qty = 0,
-      min_qty = 0,
-      max_qty = 0,
-      formula_code = "",
-    } = req.body || {};
+app.put(
+  "/api/items/:id/particulars/:particularId",
+  requireAuth,
+  requireRole("admin", "accountant"),
+  (req, res) => {
+    try {
+      const itemId = Number(req.params.id);
+      const particularId = Number(req.params.particularId);
+      const item = db.prepare("SELECT id FROM items WHERE id = ? AND is_active = 1").get(itemId);
+      const particular = db
+        .prepare("SELECT id FROM item_particulars WHERE id = ? AND item_id = ?")
+        .get(particularId, itemId);
+      if (!item || !particular) {
+        return res.status(404).json({ error: "Particular not found" });
+      }
 
-    const costPrice = finiteNumber(cost_price, "Cost price", { min: 0 });
-    const wholesalePrice = finiteNumber(ws_price, "Wholesale price", { min: 0 });
-    const salePrice = finiteNumber(sale_price, "Sale price", { min: 0 });
-    const stockQty = finiteNumber(stock_qty, "Opening stock", { min: 0 });
-    const minQty = finiteNumber(min_qty, "Minimum stock", { min: 0 });
-    const maxQty = finiteNumber(max_qty, "Maximum stock", { min: 0 });
-    if (maxQty > 0 && maxQty < minQty) {
-      return res.status(400).json({ error: "Maximum stock cannot be lower than minimum stock" });
-    }
+      const {
+        type = "",
+        weight_unit = "",
+        cost_price = 0,
+        ws_price = 0,
+        sale_price = 0,
+        stock_qty = 0,
+        min_qty = 0,
+        max_qty = 0,
+        formula_code = "",
+      } = req.body || {};
 
-    const insert = db
-      .prepare(
-        "INSERT INTO item_particulars (item_id, type, weight_unit, cost_price, ws_price, sale_price, stock_qty, min_qty, max_qty, formula_code, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT MAX(sort_order)+1 FROM item_particulars WHERE item_id=?), 1), datetime('now'))",
-      )
-      .run(
-        itemId,
+      const costPrice = finiteNumber(cost_price, "Cost price", { min: 0 });
+      const wholesalePrice = finiteNumber(ws_price, "Wholesale price", { min: 0 });
+      const salePrice = finiteNumber(sale_price, "Sale price", { min: 0 });
+      const stockQty = finiteNumber(stock_qty, "Opening stock", { min: 0 });
+      const minQty = finiteNumber(min_qty, "Minimum stock", { min: 0 });
+      const maxQty = finiteNumber(max_qty, "Maximum stock", { min: 0 });
+      if (maxQty > 0 && maxQty < minQty) {
+        return res.status(400).json({ error: "Maximum stock cannot be lower than minimum stock" });
+      }
+
+      db.prepare(
+        "UPDATE item_particulars SET type = ?, weight_unit = ?, cost_price = ?, ws_price = ?, sale_price = ?, stock_qty = ?, min_qty = ?, max_qty = ?, formula_code = ? WHERE id = ? AND item_id = ?",
+      ).run(
         String(type || "").trim(),
         String(weight_unit || "").trim(),
         costPrice,
@@ -2029,85 +2142,36 @@ app.post("/api/items/:id/particulars", requireAuth, (req, res) => {
         minQty,
         maxQty,
         String(formula_code || "").trim(),
+        particularId,
         itemId,
       );
 
-    const row = db
-      .prepare("SELECT * FROM item_particulars WHERE id = ?")
-      .get(insert.lastInsertRowid);
-    res.status(201).json(row);
-  } catch (error) {
-    res.status(400).json({ error: error.message || "Unable to save particular" });
-  }
-});
+      const row = db.prepare("SELECT * FROM item_particulars WHERE id = ?").get(particularId);
+      res.json(row);
+    } catch (error) {
+      sendRouteError(res, error, 400, "Unable to update particular");
+    }
+  },
+);
 
-app.put("/api/items/:id/particulars/:particularId", requireAuth, (req, res) => {
-  try {
+app.delete(
+  "/api/items/:id/particulars/:particularId",
+  requireAuth,
+  requireRole("admin"),
+  (req, res) => {
     const itemId = Number(req.params.id);
     const particularId = Number(req.params.particularId);
-    const item = db.prepare("SELECT id FROM items WHERE id = ? AND is_active = 1").get(itemId);
-    const particular = db
-      .prepare("SELECT id FROM item_particulars WHERE id = ? AND item_id = ?")
-      .get(particularId, itemId);
-    if (!item || !particular) {
-      return res.status(404).json({ error: "Particular not found" });
-    }
-
-    const {
-      type = "",
-      weight_unit = "",
-      cost_price = 0,
-      ws_price = 0,
-      sale_price = 0,
-      stock_qty = 0,
-      min_qty = 0,
-      max_qty = 0,
-      formula_code = "",
-    } = req.body || {};
-
-    const costPrice = finiteNumber(cost_price, "Cost price", { min: 0 });
-    const wholesalePrice = finiteNumber(ws_price, "Wholesale price", { min: 0 });
-    const salePrice = finiteNumber(sale_price, "Sale price", { min: 0 });
-    const stockQty = finiteNumber(stock_qty, "Opening stock", { min: 0 });
-    const minQty = finiteNumber(min_qty, "Minimum stock", { min: 0 });
-    const maxQty = finiteNumber(max_qty, "Maximum stock", { min: 0 });
-    if (maxQty > 0 && maxQty < minQty) {
-      return res.status(400).json({ error: "Maximum stock cannot be lower than minimum stock" });
-    }
-
-    db.prepare(
-      "UPDATE item_particulars SET type = ?, weight_unit = ?, cost_price = ?, ws_price = ?, sale_price = ?, stock_qty = ?, min_qty = ?, max_qty = ?, formula_code = ? WHERE id = ? AND item_id = ?",
-    ).run(
-      String(type || "").trim(),
-      String(weight_unit || "").trim(),
-      costPrice,
-      wholesalePrice,
-      salePrice,
-      stockQty,
-      minQty,
-      maxQty,
-      String(formula_code || "").trim(),
+    db.prepare("DELETE FROM item_particulars WHERE id = ? AND item_id = ?").run(
       particularId,
       itemId,
     );
-
-    const row = db.prepare("SELECT * FROM item_particulars WHERE id = ?").get(particularId);
-    res.json(row);
-  } catch (error) {
-    res.status(400).json({ error: error.message || "Unable to update particular" });
-  }
-});
-
-app.delete("/api/items/:id/particulars/:particularId", requireAuth, (req, res) => {
-  const itemId = Number(req.params.id);
-  const particularId = Number(req.params.particularId);
-  db.prepare("DELETE FROM item_particulars WHERE id = ? AND item_id = ?").run(particularId, itemId);
-  db.prepare("DELETE FROM formulas WHERE particular_id = ?").run(particularId);
-  db.prepare(
-    "DELETE FROM formula_lines WHERE formula_id IN (SELECT id FROM formulas WHERE particular_id = ?)",
-  ).run(particularId);
-  res.json({ ok: true });
-});
+    db.prepare("DELETE FROM formulas WHERE particular_id = ?").run(particularId);
+    db.prepare(
+      "DELETE FROM formula_lines WHERE formula_id IN (SELECT id FROM formulas WHERE particular_id = ?)",
+    ).run(particularId);
+    res.json({ ok: true });
+  },
+);
 
 app.get("/api/formulas", requireAuth, (_req, res) => {
   const rows = db
@@ -2180,88 +2244,101 @@ app.get("/api/formulas/:particularId", requireAuth, (req, res) => {
   res.json({ formula, lines });
 });
 
-app.post("/api/formulas/:particularId", requireAuth, (req, res) => {
-  try {
-    const particularId = Number(req.params.particularId);
-    const { code = "", batch_size = 1, remarks = "", lines = [] } = req.body || {};
-    const payload = {
-      batch_size,
-      lines,
-      remarks,
-    };
+app.post(
+  "/api/formulas/:particularId",
+  requireAuth,
+  requireRole("admin", "accountant"),
+  (req, res) => {
+    try {
+      const particularId = Number(req.params.particularId);
+      const { code = "", batch_size = 1, remarks = "", lines = [] } = req.body || {};
+      const payload = {
+        batch_size,
+        lines,
+        remarks,
+      };
 
-    const validation = validateFormulaPayload(particularId, payload);
-    const normalizedCode = String(code || "").trim();
+      const validation = validateFormulaPayload(particularId, payload);
+      const normalizedCode = String(code || "").trim();
 
-    const writeFormula = db.transaction(() => {
-      let formula = db.prepare("SELECT * FROM formulas WHERE particular_id = ?").get(particularId);
-      if (formula) {
+      const writeFormula = db.transaction(() => {
+        let formula = db
+          .prepare("SELECT * FROM formulas WHERE particular_id = ?")
+          .get(particularId);
+        if (formula) {
+          db.prepare(
+            "UPDATE formulas SET code = ?, batch_size = ?, remarks = ?, updated_at = datetime('now') WHERE id = ?",
+          ).run(normalizedCode, validation.batchSize, String(remarks || "").trim(), formula.id);
+        } else {
+          const insert = db
+            .prepare(
+              "INSERT INTO formulas (particular_id, code, batch_size, total_cost, remarks, updated_at) VALUES (?, ?, ?, ?, ?, datetime('now'))",
+            )
+            .run(
+              particularId,
+              normalizedCode,
+              validation.batchSize,
+              0,
+              String(remarks || "").trim(),
+            );
+
+          formula = db.prepare("SELECT * FROM formulas WHERE id = ?").get(insert.lastInsertRowid);
+        }
+
+        db.prepare("DELETE FROM formula_lines WHERE formula_id = ?").run(formula.id);
+
+        const lineInsert = db.prepare(
+          "INSERT INTO formula_lines (formula_id, factory_item_id, material_name, value, rate, cost_value, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        );
+
+        const totalCost = lines.reduce((sum, line) => {
+          const value = finiteNumber(line?.value ?? 0, "Formula quantity", { min: Number.EPSILON });
+          const rate = finiteNumber(line?.rate ?? 0, "Formula rate", { min: 0 });
+          return sum + value * rate;
+        }, 0);
+
+        for (const [index, line] of lines.entries()) {
+          const materialId = Number(line?.factory_item_id ?? 0);
+          const factoryItem = validateFactoryMaterial(
+            materialId,
+            `Formula line ${index + 1} raw material`,
+          );
+          const value = finiteNumber(line?.value ?? 0, `Formula line ${index + 1} quantity`, {
+            min: Number.EPSILON,
+          });
+          const rate = finiteNumber(line?.rate ?? 0, `Formula line ${index + 1} rate`, {
+            min: 0,
+          });
+          const costValue = value * rate;
+          lineInsert.run(
+            formula.id,
+            materialId,
+            String(line?.material_name || factoryItem.name).trim(),
+            value,
+            rate,
+            costValue,
+            index + 1,
+          );
+        }
+
         db.prepare(
-          "UPDATE formulas SET code = ?, batch_size = ?, remarks = ?, updated_at = datetime('now') WHERE id = ?",
-        ).run(normalizedCode, validation.batchSize, String(remarks || "").trim(), formula.id);
-      } else {
-        const insert = db
-          .prepare(
-            "INSERT INTO formulas (particular_id, code, batch_size, total_cost, remarks, updated_at) VALUES (?, ?, ?, ?, ?, datetime('now'))",
-          )
-          .run(particularId, normalizedCode, validation.batchSize, 0, String(remarks || "").trim());
+          "UPDATE formulas SET total_cost = ?, updated_at = datetime('now') WHERE id = ?",
+        ).run(Number(totalCost), formula.id);
 
-        formula = db.prepare("SELECT * FROM formulas WHERE id = ?").get(insert.lastInsertRowid);
-      }
+        return db.prepare("SELECT * FROM formulas WHERE id = ?").get(formula.id);
+      });
 
-      db.prepare("DELETE FROM formula_lines WHERE formula_id = ?").run(formula.id);
+      const fresh = writeFormula();
+      const storedLines = db
+        .prepare("SELECT * FROM formula_lines WHERE formula_id = ? ORDER BY sort_order ASC, id ASC")
+        .all(fresh.id);
 
-      const lineInsert = db.prepare(
-        "INSERT INTO formula_lines (formula_id, factory_item_id, material_name, value, rate, cost_value, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      );
-
-      const totalCost = lines.reduce((sum, line) => {
-        const value = finiteNumber(line?.value ?? 0, "Formula quantity", { min: Number.EPSILON });
-        const rate = finiteNumber(line?.rate ?? 0, "Formula rate", { min: 0 });
-        return sum + value * rate;
-      }, 0);
-
-      for (const [index, line] of lines.entries()) {
-        const materialId = Number(line?.factory_item_id ?? 0);
-        const factoryItem = validateFactoryMaterial(
-          materialId,
-          `Formula line ${index + 1} raw material`,
-        );
-        const value = finiteNumber(line?.value ?? 0, `Formula line ${index + 1} quantity`, {
-          min: Number.EPSILON,
-        });
-        const rate = finiteNumber(line?.rate ?? 0, `Formula line ${index + 1} rate`, {
-          min: 0,
-        });
-        const costValue = value * rate;
-        lineInsert.run(
-          formula.id,
-          materialId,
-          String(line?.material_name || factoryItem.name).trim(),
-          value,
-          rate,
-          costValue,
-          index + 1,
-        );
-      }
-
-      db.prepare(
-        "UPDATE formulas SET total_cost = ?, updated_at = datetime('now') WHERE id = ?",
-      ).run(Number(totalCost), formula.id);
-
-      return db.prepare("SELECT * FROM formulas WHERE id = ?").get(formula.id);
-    });
-
-    const fresh = writeFormula();
-    const storedLines = db
-      .prepare("SELECT * FROM formula_lines WHERE formula_id = ? ORDER BY sort_order ASC, id ASC")
-      .all(fresh.id);
-
-    res.json({ formula: fresh, lines: storedLines });
-  } catch (error) {
-    res.status(400).json({ error: error.message || "Unable to save formula" });
-  }
-});
+      res.json({ formula: fresh, lines: storedLines });
+    } catch (error) {
+      sendRouteError(res, error, 400, "Unable to save formula");
+    }
+  },
+);
 
 // ---------- Dashboard summary (Phase 1) ----------
 app.get("/api/dashboard/summary", requireAuth, (_req, res) => {
@@ -2365,6 +2442,7 @@ app.post("/api/auth/change-password", requireAuth, (req, res) => {
     salt,
     user.id,
   );
+  db.prepare("DELETE FROM sessions WHERE user_id = ? AND token != ?").run(user.id, req.token);
   res.json({ ok: true });
 });
 
@@ -2381,7 +2459,7 @@ app.post("/api/accounting/backpost", requireAuth, requireRole("admin"), (req, re
     });
     res.json(result);
   } catch (error) {
-    res.status(400).json({ error: error.message || "Back-post failed" });
+    sendRouteError(res, error, 400, "Back-post failed");
   }
 });
 
@@ -2389,7 +2467,7 @@ app.post("/api/accounting/backpost/revert", requireAuth, requireRole("admin"), (
   try {
     res.json(revertBackpost());
   } catch (error) {
-    res.status(400).json({ error: error.message || "Revert failed" });
+    sendRouteError(res, error, 400, "Revert failed");
   }
 });
 
@@ -2403,7 +2481,7 @@ app.post("/api/backup/restore", requireAuth, requireRole("admin"), (req, res) =>
   try {
     res.json(restoreToNewFile(req.body?.backup_id ?? req.body?.file_name));
   } catch (error) {
-    res.status(400).json({ error: error.message || "Restore failed" });
+    sendRouteError(res, error, 400, "Restore failed");
   }
 });
 
@@ -2416,17 +2494,19 @@ app.post("/api/backup/verify", requireAuth, requireRole("admin"), (req, res) => 
       ...verifyDatabaseFile(backup.file_path),
     });
   } catch (error) {
-    res.status(400).json({ error: error.message || "Verification failed" });
+    sendRouteError(res, error, 400, "Verification failed");
   }
 });
 
 app.use((err, _req, res, _next) => {
-  console.error(err);
-  res.status(500).json({ error: err.message || "Internal server error" });
+  sendRouteError(res, err, 500, "Internal server error");
 });
 
-const server = app.listen(PORT, () => {
-  console.log(`Paint ERP API listening on http://localhost:${PORT}`);
+const server = app.listen(PORT, HOST, () => {
+  const address = server.address();
+  const host = typeof address === "string" ? address : address?.address || HOST;
+  const port = typeof address === "string" ? PORT : address?.port || PORT;
+  console.log(`Paint ERP API listening on http://${host}:${port}`);
   console.log(`SQLite database: ${DB_PATH}`);
 });
 
@@ -2446,4 +2526,3 @@ function handleShutdown(signal) {
 
 process.on("SIGINT", () => handleShutdown("SIGINT"));
 process.on("SIGTERM", () => handleShutdown("SIGTERM"));
-

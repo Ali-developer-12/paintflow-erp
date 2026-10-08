@@ -15,20 +15,10 @@ import { assertPostingAllowed } from "./years.js";
 import { DOC_PREFIX, nextUniqueVoucherNo, accountVoucherNo } from "./vouchers.js";
 import { recordAuditLog } from "./audit.js";
 import { APP_NAME, APP_VERSION, BUSY_TIMEOUT_MS } from "./config.js";
+import { sendRouteError } from "./http-errors.js";
+import { finiteNumber } from "./validation.js";
 
 const router = Router();
-
-function finiteNumber(value, fieldName, options = {}) {
-  const { min = Number.NEGATIVE_INFINITY, max = Number.POSITIVE_INFINITY } = options;
-  const number = Number(value ?? 0);
-  if (!Number.isFinite(number)) {
-    throw new Error(`${fieldName} must be a valid number`);
-  }
-  if (number < min || number > max) {
-    throw new Error(`${fieldName} is out of range`);
-  }
-  return number;
-}
 
 // =========================================================
 // 1. CUSTOMER RECEIPTS
@@ -69,11 +59,11 @@ router.get("/api/receipts", requireAuth, (req, res) => {
     const rows = db.prepare(sql).all(...params);
     res.json(rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendRouteError(res, err, 500, "Request failed");
   }
 });
 
-router.post("/api/receipts", requireAuth, (req, res) => {
+router.post("/api/receipts", requireAuth, requireRole("admin", "accountant"), (req, res) => {
   try {
     const customerId = Number(req.body?.customer_id || 0);
     const customer = db
@@ -158,7 +148,7 @@ router.post("/api/receipts", requireAuth, (req, res) => {
 
     res.status(201).json(result);
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    sendRouteError(res, err, 400, "Request failed");
   }
 });
 
@@ -201,11 +191,11 @@ router.get("/api/payments", requireAuth, (req, res) => {
     const rows = db.prepare(sql).all(...params);
     res.json(rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendRouteError(res, err, 500, "Request failed");
   }
 });
 
-router.post("/api/payments", requireAuth, (req, res) => {
+router.post("/api/payments", requireAuth, requireRole("admin", "accountant"), (req, res) => {
   try {
     const supplierId = Number(req.body?.supplier_id || 0);
     const supplier = db
@@ -290,7 +280,7 @@ router.post("/api/payments", requireAuth, (req, res) => {
 
     res.status(201).json(result);
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    sendRouteError(res, err, 400, "Request failed");
   }
 });
 
@@ -327,11 +317,11 @@ router.get("/api/expenses", requireAuth, (req, res) => {
     const rows = db.prepare(sql).all(...params);
     res.json(rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendRouteError(res, err, 500, "Request failed");
   }
 });
 
-router.post("/api/expenses", requireAuth, (req, res) => {
+router.post("/api/expenses", requireAuth, requireRole("admin", "accountant"), (req, res) => {
   try {
     const expenseAccountId = Number(req.body?.expense_account_id || 0);
     const expenseAccount = db
@@ -409,7 +399,7 @@ router.post("/api/expenses", requireAuth, (req, res) => {
 
     res.status(201).json(result);
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    sendRouteError(res, err, 400, "Request failed");
   }
 });
 
@@ -446,11 +436,11 @@ router.get("/api/income", requireAuth, (req, res) => {
     const rows = db.prepare(sql).all(...params);
     res.json(rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendRouteError(res, err, 500, "Request failed");
   }
 });
 
-router.post("/api/income", requireAuth, (req, res) => {
+router.post("/api/income", requireAuth, requireRole("admin", "accountant"), (req, res) => {
   try {
     const incomeAccountId = Number(req.body?.income_account_id || 0);
     const incomeAccount = db
@@ -528,7 +518,7 @@ router.post("/api/income", requireAuth, (req, res) => {
 
     res.status(201).json(result);
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    sendRouteError(res, err, 400, "Request failed");
   }
 });
 
@@ -576,11 +566,11 @@ router.get("/api/journals", requireAuth, (req, res) => {
 
     res.json(result);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendRouteError(res, err, 500, "Request failed");
   }
 });
 
-router.post("/api/journals", requireAuth, (req, res) => {
+router.post("/api/journals", requireAuth, requireRole("admin", "accountant"), (req, res) => {
   try {
     const date = String(req.body?.date || "").trim();
     if (!date) return res.status(400).json({ error: "Date is required" });
@@ -698,7 +688,7 @@ router.post("/api/journals", requireAuth, (req, res) => {
 
     res.status(201).json(result);
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    sendRouteError(res, err, 400, "Request failed");
   }
 });
 
@@ -742,165 +732,171 @@ router.get("/api/stock/adjustments", requireAuth, (req, res) => {
     const rows = db.prepare(sql).all(...params);
     res.json(rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendRouteError(res, err, 500, "Request failed");
   }
 });
 
-router.post("/api/stock/adjustments", requireAuth, (req, res) => {
-  try {
-    const itemType = String(req.body?.item_type || "").toLowerCase();
-    if (itemType !== "raw" && itemType !== "finished") {
-      return res.status(400).json({ error: "item_type must be either 'raw' or 'finished'" });
-    }
+router.post(
+  "/api/stock/adjustments",
+  requireAuth,
+  requireRole("admin", "accountant"),
+  (req, res) => {
+    try {
+      const itemType = String(req.body?.item_type || "").toLowerCase();
+      if (itemType !== "raw" && itemType !== "finished") {
+        return res.status(400).json({ error: "item_type must be either 'raw' or 'finished'" });
+      }
 
-    const date = String(req.body?.date || "").trim();
-    if (!date) return res.status(400).json({ error: "Date is required" });
-    assertPostingAllowed(date);
+      const date = String(req.body?.date || "").trim();
+      if (!date) return res.status(400).json({ error: "Date is required" });
+      assertPostingAllowed(date);
 
-    const adjustmentQty = round2(Number(req.body?.adjustment_qty || 0));
-    if (!Number.isFinite(adjustmentQty) || adjustmentQty === 0) {
-      return res.status(400).json({ error: "adjustment_qty must be a non-zero number" });
-    }
+      const adjustmentQty = round2(Number(req.body?.adjustment_qty || 0));
+      if (!Number.isFinite(adjustmentQty) || adjustmentQty === 0) {
+        return res.status(400).json({ error: "adjustment_qty must be a non-zero number" });
+      }
 
-    const reason = String(req.body?.reason || "").trim();
-    if (!reason) return res.status(400).json({ error: "Reason is required for stock adjustment" });
+      const reason = String(req.body?.reason || "").trim();
+      if (!reason)
+        return res.status(400).json({ error: "Reason is required for stock adjustment" });
 
-    const result = db.transaction(() => {
-      let previousQty = 0;
-      let factoryItemId = null;
-      let particularId = null;
-      let itemName = "";
-      let rate = 0;
+      const result = db.transaction(() => {
+        let previousQty = 0;
+        let factoryItemId = null;
+        let particularId = null;
+        let itemName = "";
+        let rate = 0;
 
-      if (itemType === "raw") {
-        factoryItemId = Number(req.body?.factory_item_id || 0);
-        const item = db
-          .prepare(
-            "SELECT id, name, stock_qty, rate FROM factory_items WHERE id = ? AND is_active = 1",
-          )
-          .get(factoryItemId);
-        if (!item) throw new Error("Raw material item not found or inactive");
-        previousQty = round2(Number(item.stock_qty || 0));
-        itemName = item.name;
-        rate = Number(item.rate || 0);
-      } else {
-        particularId = Number(req.body?.particular_id || 0);
-        const part = db
-          .prepare(
-            `
+        if (itemType === "raw") {
+          factoryItemId = Number(req.body?.factory_item_id || 0);
+          const item = db
+            .prepare(
+              "SELECT id, name, stock_qty, rate FROM factory_items WHERE id = ? AND is_active = 1",
+            )
+            .get(factoryItemId);
+          if (!item) throw new Error("Raw material item not found or inactive");
+          previousQty = round2(Number(item.stock_qty || 0));
+          itemName = item.name;
+          rate = Number(item.rate || 0);
+        } else {
+          particularId = Number(req.body?.particular_id || 0);
+          const part = db
+            .prepare(
+              `
           SELECT ip.id, ip.stock_qty, ip.cost_price, i.name
           FROM item_particulars ip
           JOIN items i ON i.id = ip.item_id
           WHERE ip.id = ? AND i.is_active = 1
         `,
-          )
-          .get(particularId);
-        if (!part) throw new Error("Finished goods item not found or inactive");
-        previousQty = round2(Number(part.stock_qty || 0));
-        itemName = part.name;
-        rate = Number(part.cost_price || 0);
-      }
+            )
+            .get(particularId);
+          if (!part) throw new Error("Finished goods item not found or inactive");
+          previousQty = round2(Number(part.stock_qty || 0));
+          itemName = part.name;
+          rate = Number(part.cost_price || 0);
+        }
 
-      const resultingQty = round2(previousQty + adjustmentQty);
-      if (resultingQty < 0) {
-        throw new Error(
-          `Adjustment would drive stock negative: Previous ${previousQty} + Adjustment ${adjustmentQty} = ${resultingQty} < 0`,
-        );
-      }
+        const resultingQty = round2(previousQty + adjustmentQty);
+        if (resultingQty < 0) {
+          throw new Error(
+            `Adjustment would drive stock negative: Previous ${previousQty} + Adjustment ${adjustmentQty} = ${resultingQty} < 0`,
+          );
+        }
 
-      const voucherNo = nextUniqueVoucherNo(DOC_PREFIX.adjustment);
+        const voucherNo = nextUniqueVoucherNo(DOC_PREFIX.adjustment);
 
-      // Update current stock
-      if (itemType === "raw") {
-        db.prepare("UPDATE factory_items SET stock_qty = ? WHERE id = ?").run(
-          resultingQty,
-          factoryItemId,
-        );
-      } else {
-        db.prepare("UPDATE item_particulars SET stock_qty = ? WHERE id = ?").run(
-          resultingQty,
-          particularId,
-        );
-      }
+        // Update current stock
+        if (itemType === "raw") {
+          db.prepare("UPDATE factory_items SET stock_qty = ? WHERE id = ?").run(
+            resultingQty,
+            factoryItemId,
+          );
+        } else {
+          db.prepare("UPDATE item_particulars SET stock_qty = ? WHERE id = ?").run(
+            resultingQty,
+            particularId,
+          );
+        }
 
-      // Insert adjustment record
-      const insert = db
-        .prepare(
-          `
+        // Insert adjustment record
+        const insert = db
+          .prepare(
+            `
         INSERT INTO stock_adjustments (voucher_no, date, item_type, factory_item_id, particular_id, previous_qty, adjustment_qty, resulting_qty, reason, user_id, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
       `,
-        )
-        .run(
-          voucherNo,
-          date,
-          itemType,
-          factoryItemId,
-          particularId,
-          previousQty,
-          adjustmentQty,
-          resultingQty,
-          reason,
-          req.user?.id || null,
-        );
+          )
+          .run(
+            voucherNo,
+            date,
+            itemType,
+            factoryItemId,
+            particularId,
+            previousQty,
+            adjustmentQty,
+            resultingQty,
+            reason,
+            req.user?.id || null,
+          );
 
-      const adjId = Number(insert.lastInsertRowid);
+        const adjId = Number(insert.lastInsertRowid);
 
-      // Insert stock ledger movement
-      const qtyIn = adjustmentQty > 0 ? adjustmentQty : 0;
-      const qtyOut = adjustmentQty < 0 ? Math.abs(adjustmentQty) : 0;
+        // Insert stock ledger movement
+        const qtyIn = adjustmentQty > 0 ? adjustmentQty : 0;
+        const qtyOut = adjustmentQty < 0 ? Math.abs(adjustmentQty) : 0;
 
-      db.prepare(
-        `
+        db.prepare(
+          `
         INSERT INTO stock_ledger (date, stock_type, particular_id, factory_item_id, ref_type, ref_id, ref_no, qty_in, qty_out, rate, balance_after, remarks, created_at)
         VALUES (?, ?, ?, ?, 'adjustment', ?, ?, ?, ?, ?, ?, ?, datetime('now'))
       `,
-      ).run(
-        date,
-        itemType,
-        particularId,
-        factoryItemId,
-        adjId,
-        voucherNo,
-        qtyIn,
-        qtyOut,
-        rate,
-        resultingQty,
-        reason,
-      );
+        ).run(
+          date,
+          itemType,
+          particularId,
+          factoryItemId,
+          adjId,
+          voucherNo,
+          qtyIn,
+          qtyOut,
+          rate,
+          resultingQty,
+          reason,
+        );
 
-      recordAuditLog(db, {
-        userId: req.user?.id,
-        username: req.user?.username,
-        action: "CREATE",
-        entity: "stock_adjustment",
-        entityId: adjId,
-        details: {
+        recordAuditLog(db, {
+          userId: req.user?.id,
+          username: req.user?.username,
+          action: "CREATE",
+          entity: "stock_adjustment",
+          entityId: adjId,
+          details: {
+            voucher_no: voucherNo,
+            item_type: itemType,
+            item_name: itemName,
+            previous_qty: previousQty,
+            adjustment_qty: adjustmentQty,
+            resulting_qty: resultingQty,
+            reason,
+          },
+          ipAddress: req.ip,
+        });
+
+        return {
+          id: adjId,
           voucher_no: voucherNo,
-          item_type: itemType,
-          item_name: itemName,
           previous_qty: previousQty,
           adjustment_qty: adjustmentQty,
           resulting_qty: resultingQty,
-          reason,
-        },
-        ipAddress: req.ip,
-      });
+        };
+      })();
 
-      return {
-        id: adjId,
-        voucher_no: voucherNo,
-        previous_qty: previousQty,
-        adjustment_qty: adjustmentQty,
-        resulting_qty: resultingQty,
-      };
-    })();
-
-    res.status(201).json(result);
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
-});
+      res.status(201).json(result);
+    } catch (err) {
+      sendRouteError(res, err, 400, "Request failed");
+    }
+  },
+);
 
 // =========================================================
 // 7. OPENING STOCK
@@ -933,7 +929,7 @@ router.get("/api/stock/opening", requireAuth, (req, res) => {
     const rows = db.prepare(sql).all(...params);
     res.json(rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendRouteError(res, err, 500, "Request failed");
   }
 });
 
@@ -1062,7 +1058,7 @@ router.post("/api/stock/opening", requireAuth, requireRole("admin"), (req, res) 
 
     res.status(201).json(result);
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    sendRouteError(res, err, 400, "Request failed");
   }
 });
 
@@ -1079,7 +1075,7 @@ router.get("/api/users", requireAuth, requireRole("admin"), (_req, res) => {
       .all();
     res.json(rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendRouteError(res, err, 500, "Request failed");
   }
 });
 
@@ -1096,13 +1092,13 @@ router.post("/api/users", requireAuth, requireRole("admin"), (req, res) => {
     }
 
     const password = String(req.body?.password || "");
-    if (!password || password.length < 6) {
-      return res.status(400).json({ error: "Password must be at least 6 characters" });
+    if (!password || password.length < 8) {
+      return res.status(400).json({ error: "Password must be at least 8 characters" });
     }
 
     const role = String(req.body?.role || "user").toLowerCase();
-    if (role !== "admin" && role !== "user") {
-      return res.status(400).json({ error: "Role must be 'admin' or 'user'" });
+    if (role !== "admin" && role !== "accountant" && role !== "user") {
+      return res.status(400).json({ error: "Role must be 'admin', 'accountant' or 'user'" });
     }
 
     const fullName = String(req.body?.full_name || "").trim();
@@ -1135,7 +1131,7 @@ router.post("/api/users", requireAuth, requireRole("admin"), (req, res) => {
 
     res.status(201).json({ id: userId, username, full_name: fullName, role, is_active: 1 });
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    sendRouteError(res, err, 400, "Request failed");
   }
 });
 
@@ -1148,8 +1144,8 @@ router.put("/api/users/:id", requireAuth, requireRole("admin"), (req, res) => {
     if (!targetUser) return res.status(404).json({ error: "User not found" });
 
     const newRole = req.body?.role ? String(req.body.role).toLowerCase() : targetUser.role;
-    if (newRole !== "admin" && newRole !== "user") {
-      return res.status(400).json({ error: "Role must be 'admin' or 'user'" });
+    if (newRole !== "admin" && newRole !== "accountant" && newRole !== "user") {
+      return res.status(400).json({ error: "Role must be 'admin', 'accountant' or 'user'" });
     }
 
     const isActive =
@@ -1201,7 +1197,7 @@ router.put("/api/users/:id", requireAuth, requireRole("admin"), (req, res) => {
       is_active: isActive,
     });
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    sendRouteError(res, err, 400, "Request failed");
   }
 });
 
@@ -1212,8 +1208,8 @@ router.post("/api/users/:id/reset-password", requireAuth, requireRole("admin"), 
     if (!targetUser) return res.status(404).json({ error: "User not found" });
 
     const newPassword = String(req.body?.new_password || "");
-    if (!newPassword || newPassword.length < 6) {
-      return res.status(400).json({ error: "New password must be at least 6 characters" });
+    if (!newPassword || newPassword.length < 8) {
+      return res.status(400).json({ error: "New password must be at least 8 characters" });
     }
 
     const { hash, salt } = hashPassword(newPassword);
@@ -1224,7 +1220,7 @@ router.post("/api/users/:id/reset-password", requireAuth, requireRole("admin"), 
     );
 
     // Invalidate target user's active sessions
-    db.prepare("DELETE FROM sessions WHERE user_id = ?").run(targetId);
+    db.prepare("DELETE FROM sessions WHERE user_id = ? AND token != ?").run(targetId, req.token);
 
     recordAuditLog(db, {
       userId: req.user?.id,
@@ -1238,7 +1234,7 @@ router.post("/api/users/:id/reset-password", requireAuth, requireRole("admin"), 
 
     res.json({ ok: true, message: `Password reset successfully for user ${targetUser.username}` });
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    sendRouteError(res, err, 400, "Request failed");
   }
 });
 
@@ -1268,7 +1264,7 @@ router.get("/api/audit-logs", requireAuth, requireRole("admin"), (req, res) => {
 
     res.json({ total, rows });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendRouteError(res, err, 500, "Request failed");
   }
 });
 
@@ -1329,7 +1325,7 @@ router.get("/api/diagnostics", requireAuth, requireRole("admin"), (_req, res) =>
       },
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendRouteError(res, err, 500, "Request failed");
   }
 });
 
@@ -1436,7 +1432,7 @@ router.get("/api/reports/profit-and-loss", requireAuth, (req, res) => {
       net_profit: netProfit,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendRouteError(res, err, 500, "Request failed");
   }
 });
 
@@ -1521,7 +1517,7 @@ router.get("/api/reports/balance-sheet", requireAuth, (req, res) => {
       balanced: Math.abs(totalAssets - round2(totalLiabilities + finalEquity)) <= 0.01,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendRouteError(res, err, 500, "Request failed");
   }
 });
 
@@ -1579,7 +1575,7 @@ router.get("/api/reports/stock-valuation", requireAuth, (_req, res) => {
       total_inventory_cost_value: round2(rawTotalValue + finishedTotalCostValue),
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendRouteError(res, err, 500, "Request failed");
   }
 });
 
@@ -1664,7 +1660,7 @@ router.get("/api/reports/statements", requireAuth, (req, res) => {
       lines,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendRouteError(res, err, 500, "Request failed");
   }
 });
 

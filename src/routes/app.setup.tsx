@@ -1,7 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Trash2, Save, RefreshCcw, Key, Shield, History, Activity, CheckCircle2, AlertTriangle, X } from "lucide-react";
+import {
+  Plus,
+  Trash2,
+  Save,
+  RefreshCcw,
+  Key,
+  Shield,
+  History,
+  Activity,
+  CheckCircle2,
+  AlertTriangle,
+  X,
+} from "lucide-react";
 import { apiDelete, apiGet, apiPost, apiPut } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -121,6 +134,7 @@ export const Route = createFileRoute("/app/setup")({
 });
 
 function SetupPage() {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("Employees");
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -205,7 +219,12 @@ function SetupPage() {
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditRecord[]>([]);
   const [diagnostics, setDiagnostics] = useState<DiagnosticsRecord | null>(null);
-  const [userForm, setUserForm] = useState({ username: "", password: "", full_name: "", role: "user" });
+  const [userForm, setUserForm] = useState({
+    username: "",
+    password: "",
+    full_name: "",
+    role: "user",
+  });
   const [resetModalUser, setResetModalUser] = useState<UserRecord | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [savingUser, setSavingUser] = useState(false);
@@ -249,6 +268,10 @@ function SetupPage() {
       toast.error("Username and password are required");
       return;
     }
+    if (userForm.password.length < 8) {
+      toast.error("Password must be at least 8 characters");
+      return;
+    }
     setSavingUser(true);
     try {
       await apiPost("/users", userForm);
@@ -273,7 +296,9 @@ function SetupPage() {
   }
 
   async function toggleUserRole(u: UserRecord) {
-    const newRole = u.role === "admin" ? "user" : "admin";
+    const roles = ["user", "accountant", "admin"];
+    const roleIndex = roles.indexOf(u.role);
+    const newRole = roles[(roleIndex + 1) % roles.length];
     try {
       await apiPut(`/users/${u.id}`, { role: newRole });
       toast.success(`User ${u.username} role changed to ${newRole}`);
@@ -297,8 +322,8 @@ function SetupPage() {
   }
 
   useEffect(() => {
-    void loadData();
-  }, []);
+    if (user?.role === "admin") void loadData();
+  }, [user?.role]);
 
   async function saveEmployee() {
     if (!employeeForm.name.trim()) return;
@@ -417,6 +442,14 @@ function SetupPage() {
   const renderForm = () => {
     switch (activeTab) {
       case "Employees":
+        if (user?.role !== "admin") {
+          return (
+            <div className="p-6 text-sm text-muted-foreground">
+              Setup and user management are available to administrators only.
+            </div>
+          );
+        }
+
         return (
           <div className="space-y-5">
             <div className="grid gap-4 md:grid-cols-2">
@@ -930,7 +963,10 @@ function SetupPage() {
       case "Users & Roles":
         return (
           <div className="space-y-6">
-            <form onSubmit={saveUser} className="rounded-md border border-border bg-card p-5 space-y-4">
+            <form
+              onSubmit={saveUser}
+              className="rounded-md border border-border bg-card p-5 space-y-4"
+            >
               <div className="text-base font-semibold flex items-center gap-2">
                 <Shield className="h-4 w-4 text-primary" /> Create Operator Account
               </div>
@@ -948,9 +984,10 @@ function SetupPage() {
                   <label className="text-xs font-medium block mb-1">Password *</label>
                   <Input
                     type="password"
-                    placeholder="Min 6 characters"
+                    placeholder="Min 8 characters"
                     value={userForm.password}
                     onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
+                    minLength={8}
                     required
                   />
                 </div>
@@ -970,6 +1007,7 @@ function SetupPage() {
                     onChange={(e) => setUserForm({ ...userForm, role: e.target.value })}
                   >
                     <option value="user">User / Operator</option>
+                    <option value="accountant">Accountant</option>
                     <option value="admin">Administrator</option>
                   </select>
                 </div>
@@ -1036,7 +1074,7 @@ function SetupPage() {
                               className="h-7 text-xs px-2"
                               onClick={() => void toggleUserRole(u)}
                             >
-                              Role: {u.role === "admin" ? "Demote" : "Promote"}
+                              Role: Change
                             </Button>
                             <Button
                               variant="outline"
@@ -1074,23 +1112,33 @@ function SetupPage() {
                   className="bg-card w-full max-w-sm rounded-xl border border-border p-5 space-y-4 shadow-xl"
                 >
                   <div className="flex justify-between items-center border-b border-border pb-2">
-                    <h4 className="font-bold text-sm">Reset Password for {resetModalUser.username}</h4>
+                    <h4 className="font-bold text-sm">
+                      Reset Password for {resetModalUser.username}
+                    </h4>
                     <button type="button" onClick={() => setResetModalUser(null)}>
                       <X className="h-4 w-4" />
                     </button>
                   </div>
                   <div>
-                    <label className="text-xs font-medium block mb-1">New Password (min 6 chars)</label>
+                    <label className="text-xs font-medium block mb-1">
+                      New Password (min 8 chars)
+                    </label>
                     <Input
                       type="password"
                       placeholder="Enter new password"
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
+                      minLength={8}
                       required
                     />
                   </div>
                   <div className="flex justify-end gap-2 pt-2">
-                    <Button type="button" variant="outline" size="sm" onClick={() => setResetModalUser(null)}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setResetModalUser(null)}
+                    >
                       Cancel
                     </Button>
                     <Button type="submit" size="sm">
@@ -1171,20 +1219,41 @@ function SetupPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
                 <div className="rounded-lg border border-border p-4 bg-card space-y-2">
                   <h4 className="font-bold text-sm text-foreground">Application Info</h4>
-                  <p><strong>App:</strong> {diagnostics.app_name}</p>
-                  <p><strong>Version:</strong> {diagnostics.app_version}</p>
-                  <p><strong>Uptime:</strong> {Math.floor(diagnostics.uptime_seconds / 60)} minutes</p>
-                  <p><strong>Node.js:</strong> {diagnostics.node_version}</p>
-                  <p><strong>Platform:</strong> {diagnostics.platform}</p>
+                  <p>
+                    <strong>App:</strong> {diagnostics.app_name}
+                  </p>
+                  <p>
+                    <strong>Version:</strong> {diagnostics.app_version}
+                  </p>
+                  <p>
+                    <strong>Uptime:</strong> {Math.floor(diagnostics.uptime_seconds / 60)} minutes
+                  </p>
+                  <p>
+                    <strong>Node.js:</strong> {diagnostics.node_version}
+                  </p>
+                  <p>
+                    <strong>Platform:</strong> {diagnostics.platform}
+                  </p>
                 </div>
 
                 <div className="rounded-lg border border-border p-4 bg-card space-y-2">
                   <h4 className="font-bold text-sm text-foreground">SQLite Storage</h4>
-                  <p className="truncate"><strong>Path:</strong> {diagnostics.database.path}</p>
-                  <p><strong>Size:</strong> {(diagnostics.database.size_bytes / 1024).toFixed(1)} KB</p>
-                  <p><strong>Journal Mode:</strong> {diagnostics.database.journal_mode}</p>
-                  <p><strong>Busy Timeout:</strong> {diagnostics.database.busy_timeout_ms} ms</p>
-                  <p><strong>Schema Version:</strong> user_version {diagnostics.database.user_version}</p>
+                  <p className="truncate">
+                    <strong>Path:</strong> {diagnostics.database.path}
+                  </p>
+                  <p>
+                    <strong>Size:</strong> {(diagnostics.database.size_bytes / 1024).toFixed(1)} KB
+                  </p>
+                  <p>
+                    <strong>Journal Mode:</strong> {diagnostics.database.journal_mode}
+                  </p>
+                  <p>
+                    <strong>Busy Timeout:</strong> {diagnostics.database.busy_timeout_ms} ms
+                  </p>
+                  <p>
+                    <strong>Schema Version:</strong> user_version{" "}
+                    {diagnostics.database.user_version}
+                  </p>
                 </div>
 
                 <div className="rounded-lg border border-border p-4 bg-card space-y-2">
@@ -1192,27 +1261,50 @@ function SetupPage() {
                   <p className="flex items-center gap-1.5">
                     <strong>Integrity:</strong>
                     <span className="text-emerald-600 font-semibold flex items-center gap-1">
-                      <CheckCircle2 className="h-3.5 w-3.5" /> {diagnostics.database.integrity_check}
+                      <CheckCircle2 className="h-3.5 w-3.5" />{" "}
+                      {diagnostics.database.integrity_check}
                     </span>
                   </p>
-                  <p><strong>FK Violations:</strong> {diagnostics.database.foreign_key_violations}</p>
+                  <p>
+                    <strong>FK Violations:</strong> {diagnostics.database.foreign_key_violations}
+                  </p>
                   <p className="flex items-center gap-1.5">
                     <strong>Stock Ledger:</strong>
-                    <span className={diagnostics.stock_reconciliation.ok ? "text-emerald-600 font-semibold" : "text-destructive font-semibold"}>
-                      {diagnostics.stock_reconciliation.ok ? "Reconciled (0 issues)" : `${diagnostics.stock_reconciliation.issues_count} issues`}
+                    <span
+                      className={
+                        diagnostics.stock_reconciliation.ok
+                          ? "text-emerald-600 font-semibold"
+                          : "text-destructive font-semibold"
+                      }
+                    >
+                      {diagnostics.stock_reconciliation.ok
+                        ? "Reconciled (0 issues)"
+                        : `${diagnostics.stock_reconciliation.issues_count} issues`}
                     </span>
                   </p>
                   <p className="flex items-center gap-1.5">
                     <strong>Trial Balance:</strong>
-                    <span className={diagnostics.accounting.trial_balance_balanced ? "text-emerald-600 font-semibold" : "text-destructive font-semibold"}>
-                      {diagnostics.accounting.trial_balance_balanced ? `Balanced (Rs ${diagnostics.accounting.total_debit})` : "Imbalanced"}
+                    <span
+                      className={
+                        diagnostics.accounting.trial_balance_balanced
+                          ? "text-emerald-600 font-semibold"
+                          : "text-destructive font-semibold"
+                      }
+                    >
+                      {diagnostics.accounting.trial_balance_balanced
+                        ? `Balanced (Rs ${diagnostics.accounting.total_debit})`
+                        : "Imbalanced"}
                     </span>
                   </p>
-                  <p><strong>Backups Recorded:</strong> {diagnostics.backups.count}</p>
+                  <p>
+                    <strong>Backups Recorded:</strong> {diagnostics.backups.count}
+                  </p>
                 </div>
               </div>
             ) : (
-              <div className="text-center py-8 text-muted-foreground text-sm">Loading diagnostics...</div>
+              <div className="text-center py-8 text-muted-foreground text-sm">
+                Loading diagnostics...
+              </div>
             )}
           </div>
         );

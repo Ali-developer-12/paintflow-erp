@@ -65,7 +65,9 @@ function AppLayout() {
 
         <nav className="flex-1 overflow-y-auto px-2 py-3">
           {MODULE_GROUPS.map((group) => {
-            const items = MODULES.filter((m) => m.group === group);
+            const items = MODULES.filter(
+              (m) => m.group === group && (m.to !== "/app/setup" || user.role === "admin"),
+            );
             if (!items.length) return null;
             return (
               <div key={group} className="mb-3">

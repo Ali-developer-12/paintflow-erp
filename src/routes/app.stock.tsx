@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
+import { useAuth } from "@/lib/auth";
 
 type StockItem = {
   id: number;
@@ -77,6 +78,9 @@ const quantity = (value: number) =>
   });
 
 function StockPage() {
+  const { user } = useAuth();
+  const canAdjustStock = user?.role === "admin" || user?.role === "accountant";
+  const isAdmin = user?.role === "admin";
   const [activeTab, setActiveTab] = useState("overview");
   const [items, setItems] = useState<StockItem[]>([]);
   const [ledger, setLedger] = useState<LedgerRow[]>([]);
@@ -464,7 +468,11 @@ function StockPage() {
                 Explicit positive or negative adjustments for breakages, losses, or cycle counts
               </p>
             </div>
-            <Button size="sm" onClick={() => setShowAdjForm(!showAdjForm)}>
+            <Button
+              size="sm"
+              disabled={!canAdjustStock}
+              onClick={() => setShowAdjForm(!showAdjForm)}
+            >
               {showAdjForm ? <X className="h-4 w-4 mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
               {showAdjForm ? "Cancel" : "New Adjustment"}
             </Button>
@@ -665,7 +673,7 @@ function StockPage() {
                 Auditable opening inventory balances carried into system
               </p>
             </div>
-            <Button size="sm" onClick={() => setShowOpnForm(!showOpnForm)}>
+            <Button size="sm" disabled={!isAdmin} onClick={() => setShowOpnForm(!showOpnForm)}>
               {showOpnForm ? <X className="h-4 w-4 mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
               {showOpnForm ? "Cancel" : "Post Opening Stock"}
             </Button>
