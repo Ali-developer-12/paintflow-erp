@@ -138,7 +138,7 @@ function BackupPage() {
         valid: res.valid,
         integrity: res.result || (res.valid ? "ok" : "failed"),
         size: res.size,
-        error: res.error,
+        error: res.error ?? "",
       });
       if (res.valid) {
         toast.success("Backup verification passed: SQLite integrity is OK");
@@ -192,7 +192,8 @@ function BackupPage() {
           </div>
           <div className="flex items-center gap-2">
             <Button onClick={() => void runBackup()} disabled={busy}>
-              <DatabaseBackup className="h-4 w-4 mr-1.5" /> {busy ? "Backing up..." : "Create Backup Now"}
+              <DatabaseBackup className="h-4 w-4 mr-1.5" />{" "}
+              {busy ? "Backing up..." : "Create Backup Now"}
             </Button>
             <Button variant="outline" onClick={() => void load()} disabled={loading}>
               <RefreshCcw className="h-4 w-4 mr-1.5" /> Refresh
@@ -216,13 +217,16 @@ function BackupPage() {
         <div className="rounded-md border border-border bg-muted/20 p-4 text-xs text-muted-foreground space-y-1">
           <p className="font-semibold text-foreground">Operational Safety Guarantee:</p>
           <p>
-            • Backups utilize SQLite&rsquo;s native online backup API (`db.backup()`) to cleanly flush WAL journals and prevent partial database captures.
+            • Backups utilize SQLite&rsquo;s native online backup API (`db.backup()`) to create
+            consistent, WAL-safe snapshots.
           </p>
           <p>
-            • Backups are automatically verified with PRAGMA integrity_check before being logged to disk.
+            • Backups are automatically verified with PRAGMA integrity_check before being logged to
+            disk.
           </p>
           <p>
-            • HTTP Restore runs in safe copy-verification mode so your current live database is never silently overwritten without an operator safety backup.
+            • HTTP Restore runs in safe copy-verification mode so your current live database is
+            never silently overwritten without an operator safety backup.
           </p>
         </div>
 
@@ -230,7 +234,9 @@ function BackupPage() {
           <div className="flex justify-between items-center">
             <h2 className="text-base font-semibold">Backup History & Recovery Points</h2>
             {listing?.directory && (
-              <span className="text-xs text-muted-foreground font-mono">Location: {listing.directory}</span>
+              <span className="text-xs text-muted-foreground font-mono">
+                Location: {listing.directory}
+              </span>
             )}
           </div>
 
@@ -255,14 +261,17 @@ function BackupPage() {
                 ) : !listing || listing.backups.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
-                      No backups have been recorded yet. Click &ldquo;Create Backup Now&rdquo; to take your first snapshot.
+                      No backups have been recorded yet. Click &ldquo;Create Backup Now&rdquo; to
+                      take your first snapshot.
                     </td>
                   </tr>
                 ) : (
                   listing.backups.map((row) => (
                     <tr key={row.id} className="hover:bg-muted/30">
                       <td className="px-3 py-2.5 font-mono text-xs font-medium">{row.file_name}</td>
-                      <td className="px-3 py-2.5 tabular-nums text-xs">{formatBytes(row.size_bytes)}</td>
+                      <td className="px-3 py-2.5 tabular-nums text-xs">
+                        {formatBytes(row.size_bytes)}
+                      </td>
                       <td className="px-3 py-2.5 text-xs">{row.created_at}</td>
                       <td className="px-3 py-2.5 text-xs text-muted-foreground">
                         {row.created_by_username ?? "System"}
@@ -275,7 +284,8 @@ function BackupPage() {
                             className="h-7 text-xs px-2.5"
                             onClick={() => void verifyBackup(row)}
                           >
-                            <ShieldCheck className="h-3.5 w-3.5 mr-1 text-primary" /> Verify & Restore
+                            <ShieldCheck className="h-3.5 w-3.5 mr-1 text-primary" /> Verify &
+                            Restore
                           </Button>
                         </div>
                       </td>
@@ -299,7 +309,9 @@ function BackupPage() {
                 </div>
                 <div>
                   <h3 className="font-bold text-base">Database Recovery Verification</h3>
-                  <p className="text-xs text-muted-foreground">Snapshot: {selectedBackup.file_name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Snapshot: {selectedBackup.file_name}
+                  </p>
                 </div>
               </div>
               <Button variant="ghost" size="sm" onClick={() => setSelectedBackup(null)}>
@@ -309,9 +321,15 @@ function BackupPage() {
 
             <div className="space-y-3 text-xs">
               <div className="rounded-md bg-muted/40 p-3 space-y-1">
-                <p><strong>File Size:</strong> {formatBytes(selectedBackup.size_bytes)}</p>
-                <p><strong>Created:</strong> {selectedBackup.created_at}</p>
-                <p className="truncate"><strong>Path:</strong> {selectedBackup.file_path}</p>
+                <p>
+                  <strong>File Size:</strong> {formatBytes(selectedBackup.size_bytes)}
+                </p>
+                <p>
+                  <strong>Created:</strong> {selectedBackup.created_at}
+                </p>
+                <p className="truncate">
+                  <strong>Path:</strong> {selectedBackup.file_path}
+                </p>
               </div>
 
               {verifying ? (
@@ -345,8 +363,12 @@ function BackupPage() {
                     <FileCheck className="h-4 w-4 text-emerald-600" />
                     Safe Restore Copy Verified!
                   </p>
-                  <p><strong>Restored To:</strong> {restoreResult.restored_to}</p>
-                  <p><strong>Tables Restored:</strong> {restoreResult.tables} business tables</p>
+                  <p>
+                    <strong>Restored To:</strong> {restoreResult.restored_to}
+                  </p>
+                  <p>
+                    <strong>Tables Restored:</strong> {restoreResult.tables} business tables
+                  </p>
                   <p className="text-[11px] text-emerald-700">{restoreResult.note}</p>
                 </div>
               )}
