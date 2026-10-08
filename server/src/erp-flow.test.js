@@ -7,10 +7,10 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
+import { getFreePort } from "./test-utils.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const PORT = Number(process.env.ERP_TEST_PORT || 3999);
-const BASE = `http://127.0.0.1:${PORT}/api`;
+let BASE;
 const ADMIN_USER = "testadmin";
 const ADMIN_PASS = "TestPass123!";
 const USER_NAME = "testuser";
@@ -102,13 +102,15 @@ async function finishedStockQty() {
 }
 
 before(async () => {
+  const port = await getFreePort();
+  BASE = `http://127.0.0.1:${port}/api`;
   dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "paint-erp-test-"));
   dbFile = path.join(dataDir, "paint-erp.db");
 
   child = spawn(process.execPath, [path.join(here, "index.js")], {
     env: {
       ...process.env,
-      PORT: String(PORT),
+      PORT: String(port),
       DATA_DIR: dataDir,
       DB_PATH: dbFile,
       PAINT_ERP_ADMIN_USERNAME: ADMIN_USER,

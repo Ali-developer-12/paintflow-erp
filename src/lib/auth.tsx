@@ -17,6 +17,7 @@ type AuthState = {
   user: AuthUser | null;
   ready: boolean;
   login: (username: string, password: string) => Promise<void>;
+  setup: (username: string, password: string, fullName: string) => Promise<void>;
   logout: () => void;
 };
 
@@ -73,13 +74,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(res.user);
   }, []);
 
+  const setup = useCallback(async (username: string, password: string, fullName: string) => {
+    const res = await apiPost<{ token: string; user: AuthUser }>("/auth/setup", {
+      username,
+      password,
+      full_name: fullName,
+    });
+    storeSession(res.token, res.user);
+    setUser(res.user);
+  }, []);
+
   const logout = useCallback(() => {
     void apiPost("/auth/logout", {}).catch(() => undefined);
     clearSession();
     setUser(null);
   }, []);
 
-  const value = useMemo(() => ({ user, ready, login, logout }), [user, ready, login, logout]);
+  const value = useMemo(
+    () => ({ user, ready, login, setup, logout }),
+    [user, ready, login, setup, logout],
+  );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

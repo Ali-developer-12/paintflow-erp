@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
 import { Droplets, Loader2, Lock, User } from "lucide-react";
 import { useAuth } from "@/lib/auth";
-import { API_URL } from "@/lib/api";
+import { API_URL, apiGet } from "@/lib/api";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -24,10 +24,12 @@ export const Route = createFileRoute("/")({
 });
 
 function LoginPage() {
-  const { user, ready, login } = useAuth();
+  const { user, ready, login, setup } = useAuth();
   const navigate = useNavigate();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [needsSetup, setNeedsSetup] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -35,12 +37,29 @@ function LoginPage() {
     if (ready && user) void navigate({ to: "/app" });
   }, [ready, user, navigate]);
 
+  useEffect(() => {
+    let active = true;
+    void apiGet<{ needsSetup: boolean }>("/auth/status")
+      .then(({ needsSetup: required }) => {
+        if (active) setNeedsSetup(required);
+      })
+      .catch((err: unknown) => {
+        if (active) {
+          setError(err instanceof Error ? err.message : "Unable to check administrator setup");
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setBusy(true);
     try {
-      await login(username, password);
+      if (needsSetup) await setup(username, password, fullName);
+      else await login(username, password);
       void navigate({ to: "/app" });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign in failed");
@@ -72,12 +91,35 @@ function LoginPage() {
 
       <div className="flex items-center justify-center bg-background px-6 py-12">
         <div className="w-full max-w-sm">
-          <h2 className="text-2xl font-semibold tracking-tight">Sign in</h2>
+          <h2 className="text-2xl font-semibold tracking-tight">
+            {needsSetup ? "Create administrator account" : "Sign in"}
+          </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Enter your operator credentials to unlock the system.
+            {needsSetup
+              ? "Set up the first administrator account for this database."
+              : "Enter your operator credentials to unlock the system."}
           </p>
 
           <form onSubmit={onSubmit} className="mt-8 space-y-4">
+            {needsSetup && (
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="full-name"
+                  className="text-xs font-medium uppercase tracking-wide text-muted-foreground"
+                >
+                  Full name
+                </label>
+                <input
+                  id="full-name"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  autoComplete="name"
+                  required
+                  className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/25"
+                  placeholder="Your name"
+                />
+              </div>
+            )}
             <div className="space-y-1.5">
               <label
                 htmlFor="username"
@@ -94,7 +136,7 @@ function LoginPage() {
                   autoComplete="username"
                   required
                   className="h-10 w-full rounded-md border border-input bg-card pl-9 pr-3 text-sm outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/25"
-                  placeholder="admin"
+                  placeholder={needsSetup ? "Choose a username" : "Username"}
                 />
               </div>
             </div>
@@ -113,10 +155,11 @@ function LoginPage() {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="current-password"
+                  autoComplete={needsSetup ? "new-password" : "current-password"}
+                  minLength={needsSetup ? 8 : undefined}
                   required
                   className="h-10 w-full rounded-md border border-input bg-card pl-9 pr-3 text-sm outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/25"
-                  placeholder="••••••••"
+                  placeholder={needsSetup ? "At least 8 characters" : "Password"}
                 />
               </div>
             </div>
@@ -129,11 +172,11 @@ function LoginPage() {
 
             <button
               type="submit"
-              disabled={busy}
+              disabled={busy || needsSetup === null}
               className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-primary text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
             >
               {busy && <Loader2 className="h-4 w-4 animate-spin" />}
-              {busy ? "Signing in…" : "Unlock"}
+              {busy ? "Please wait…" : needsSetup ? "Create administrator" : "Unlock"}
             </button>
           </form>
 
@@ -143,7 +186,7 @@ function LoginPage() {
             Start the local server first:{" "}
             <span className="font-mono">cd server &amp;&amp; npm start</span>
             <br />
-            Configure initial admin credentials in the server environment before first login.
+            First run: create the administrator account here. No default password is set.
           </div>
         </div>
       </div>

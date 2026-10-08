@@ -9,7 +9,7 @@
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "backup": "node src/backup.js",
-    "test": "node --test --test-concurrency=1 src/accounting-core.test.js src/phase4-logic.test.js src/erp-flow.test.js src/restore.test.js src/final-scenario.test.js src/erp-extended.test.js src/security-hardening.test.js"
+    "test": "node --test --test-concurrency=1 src/accounting-core.test.js src/phase4-logic.test.js src/erp-flow.test.js src/restore.test.js src/final-scenario.test.js src/erp-extended.test.js src/security-hardening.test.js src/stage3-onboarding-integrity.test.js"
   },
   "dependencies": {
     "better-sqlite3": "^11.5.0",

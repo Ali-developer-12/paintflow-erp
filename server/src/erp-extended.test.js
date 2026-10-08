@@ -2,14 +2,14 @@ import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
+import { getFreePort } from "./test-utils.js";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const PORT = Number(process.env.ERP_EXTENDED_TEST_PORT || 4002);
-const BASE = `http://127.0.0.1:${PORT}/api`;
+let BASE;
 const ADMIN_USER = "extadmin";
 const ADMIN_PASS = "ExtAdminPass123!";
 const REGULAR_USER = "extuser";
@@ -67,13 +67,15 @@ async function waitForServer() {
 }
 
 before(async () => {
+  const port = await getFreePort();
+  BASE = `http://127.0.0.1:${port}/api`;
   dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "paint-erp-ext-test-"));
   dbFile = path.join(dataDir, "paint-erp.db");
 
   child = spawn(process.execPath, [path.join(here, "index.js")], {
     env: {
       ...process.env,
-      PORT: String(PORT),
+      PORT: String(port),
       DATA_DIR: dataDir,
       DB_PATH: dbFile,
       PAINT_ERP_ADMIN_USERNAME: ADMIN_USER,

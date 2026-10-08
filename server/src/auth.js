@@ -66,28 +66,17 @@ export function ensureInitialAdminUser() {
     return null;
   }
 
-  const existing = db.prepare("SELECT * FROM users WHERE username = ?").get(username);
-  if (existing) {
-    const { hash, salt } = hashPassword(password);
-    const passwordMatches = verifyPassword(
-      password,
-      existing.password_hash,
-      existing.password_salt,
-    );
-    if (!passwordMatches || existing.role !== "admin") {
+  return db
+    .transaction(() => {
+      const userCount = db.prepare("SELECT COUNT(*) AS count FROM users").get().count;
+      if (userCount > 0) return null;
+      const { hash, salt } = hashPassword(password);
       db.prepare(
-        "UPDATE users SET password_hash = ?, password_salt = ?, role = 'admin', is_active = 1, full_name = COALESCE(full_name, ?) WHERE username = ?",
-      ).run(hash, salt, "System Administrator", username);
-    }
-    return { username };
-  }
-
-  const { hash, salt } = hashPassword(password);
-  db.prepare(
-    "INSERT INTO users (username, password_hash, password_salt, full_name, role, is_active) VALUES (?, ?, ?, ?, 'admin', 1)",
-  ).run(username, hash, salt, "System Administrator");
-
-  return { username };
+        "INSERT INTO users (username, password_hash, password_salt, full_name, role, is_active) VALUES (?, ?, ?, ?, 'admin', 1)",
+      ).run(username, hash, salt, "System Administrator");
+      return { username };
+    })
+    .immediate();
 }
 
 export function requireAuth(req, res, next) {

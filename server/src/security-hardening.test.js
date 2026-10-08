@@ -1,13 +1,26 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { test } from "node:test";
+import { after, test } from "node:test";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { logger } from "./logger.js";
 import { publicErrorMessage, sendRouteError } from "./http-errors.js";
 import { validateNumericPayload } from "./validation.js";
 
+const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "paint-erp-security-test-"));
+
+after(() => {
+  fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 10 });
+});
+
 test("the server defaults to loopback when HOST is unset", () => {
   const env = { ...process.env };
   delete env.HOST;
+  env.DATA_DIR = dataDir;
+  env.DB_PATH = path.join(dataDir, "paint-erp.db");
+  env.BACKUP_DIR = path.join(dataDir, "backups");
+  env.LOGS_DIR = path.join(dataDir, "logs");
   const result = spawnSync(
     process.execPath,
     [

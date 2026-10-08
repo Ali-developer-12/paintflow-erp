@@ -176,6 +176,58 @@ app.get("/api/settings/company-name", requireAuth, (_req, res) => {
 });
 
 // ---------- Auth ----------
+app.get("/api/auth/status", (_req, res) => {
+  const userCount = db.prepare("SELECT COUNT(*) AS count FROM users").get().count;
+  res.json({ needsSetup: userCount === 0 });
+});
+
+app.post("/api/auth/setup", loginRateLimiter, (req, res) => {
+  const username = String(req.body?.username || "")
+    .trim()
+    .toLowerCase();
+  const password = String(req.body?.password || "");
+  const fullName = String(req.body?.full_name || "").trim();
+  if (username.length < 3 || !/^[a-z0-9_.-]+$/.test(username)) {
+    return res.status(400).json({ error: "Username must be at least 3 characters and valid" });
+  }
+  if (password.length < 8) {
+    return res.status(400).json({ error: "Password must be at least 8 characters" });
+  }
+
+  try {
+    const result = db
+      .transaction(() => {
+        const userCount = db.prepare("SELECT COUNT(*) AS count FROM users").get().count;
+        if (userCount > 0) return null;
+
+        const { hash, salt } = hashPassword(password);
+        const insert = db
+          .prepare(
+            "INSERT INTO users (username, password_hash, password_salt, full_name, role, is_active) VALUES (?, ?, ?, ?, 'admin', 1)",
+          )
+          .run(username, hash, salt, fullName);
+        const userId = Number(insert.lastInsertRowid);
+        const session = createSession(userId);
+        return {
+          token: session.token,
+          expires_at: session.expires_at,
+          user: {
+            id: userId,
+            username,
+            full_name: fullName,
+            role: "admin",
+          },
+        };
+      })
+      .immediate();
+
+    if (!result) return res.status(403).json({ error: "Administrator setup is already complete" });
+    res.status(201).json(result);
+  } catch (error) {
+    sendRouteError(res, error, 400, "Unable to create administrator");
+  }
+});
+
 app.post("/api/auth/login", loginRateLimiter, (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password)
@@ -1366,8 +1418,12 @@ app.post("/api/sales", requireAuth, (req, res) => {
           throw new Error(`Insufficient stock for ${particularId}`);
         }
 
+        const costPrice = Number(particular.cost_price);
+        if (!Number.isFinite(costPrice) || costPrice <= 0) {
+          throw new Error("Item has no cost price; set the cost first");
+        }
         const amount = round2(qty * rate);
-        const cost = round2(qty * Number(particular.cost_price || 0));
+        const cost = round2(qty * costPrice);
         total += amount;
         totalCost += cost;
         lineData.push({
@@ -1376,7 +1432,7 @@ app.post("/api/sales", requireAuth, (req, res) => {
           rate,
           amount,
           cost,
-          costPrice: Number(particular.cost_price || 0),
+          costPrice,
           description: String(line.description || ""),
         });
       }
@@ -1459,18 +1515,16 @@ app.post("/api/sales", requireAuth, (req, res) => {
         debit: 0,
         credit: netTotal,
       });
-      if (totalCost > 0) {
-        entries.push({
-          account_id: requireAccountIdByCode(ACCOUNT_CODES.costOfGoodsSold),
-          debit: round2(totalCost),
-          credit: 0,
-        });
-        entries.push({
-          account_id: requireAccountIdByCode(ACCOUNT_CODES.finishedInventory),
-          debit: 0,
-          credit: round2(totalCost),
-        });
-      }
+      entries.push({
+        account_id: requireAccountIdByCode(ACCOUNT_CODES.costOfGoodsSold),
+        debit: round2(totalCost),
+        credit: 0,
+      });
+      entries.push({
+        account_id: requireAccountIdByCode(ACCOUNT_CODES.finishedInventory),
+        debit: 0,
+        credit: round2(totalCost),
+      });
       postAccountVoucher({
         voucherNo: `AV-${voucherNo}`,
         date: String(date),
@@ -1654,7 +1708,7 @@ app.post("/api/returns", requireAuth, (req, res) => {
       let total = 0;
       let returnedCost = 0;
       const insertLine = db.prepare(
-        "INSERT INTO return_lines (return_id, particular_id, factory_item_id, description, qty, rate, amount) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO return_lines (return_id, particular_id, factory_item_id, description, qty, rate, cost_price, amount) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
       );
 
       for (const line of lines) {
@@ -1671,7 +1725,11 @@ app.post("/api/returns", requireAuth, (req, res) => {
             .prepare("SELECT id, stock_qty, cost_price FROM item_particulars WHERE id = ?")
             .get(particularId);
           if (!particular) throw new Error("Customer return item variant not found");
-          returnedCost += qty * Number(particular.cost_price || 0);
+          const costPrice = Number(particular.cost_price);
+          if (!Number.isFinite(costPrice) || costPrice <= 0) {
+            throw new Error("Item has no cost price; set the cost first");
+          }
+          returnedCost += qty * costPrice;
 
           db.prepare("UPDATE item_particulars SET stock_qty = stock_qty + ? WHERE id = ?").run(
             qty,
@@ -1699,6 +1757,7 @@ app.post("/api/returns", requireAuth, (req, res) => {
             String(line.description || ""),
             qty,
             rate,
+            costPrice,
             amount,
           );
           continue;
@@ -1708,9 +1767,15 @@ app.post("/api/returns", requireAuth, (req, res) => {
         if (!factoryItemId)
           throw new Error("Supplier return line must include a valid raw material");
         const factoryItem = db
-          .prepare("SELECT id, name, stock_qty FROM factory_items WHERE id = ? AND is_active = 1")
+          .prepare(
+            "SELECT id, name, stock_qty, rate FROM factory_items WHERE id = ? AND is_active = 1",
+          )
           .get(factoryItemId);
         if (!factoryItem) throw new Error("Supplier return raw material not found");
+        const costPrice = Number(factoryItem.rate);
+        if (!Number.isFinite(costPrice) || costPrice <= 0) {
+          throw new Error("Item has no cost price; set the cost first");
+        }
         if (Number(factoryItem.stock_qty || 0) < qty) {
           throw new Error(
             `Insufficient raw stock for ${factoryItem.name}. Available ${Number(factoryItem.stock_qty || 0)}, requested ${qty}.`,
@@ -1743,6 +1808,7 @@ app.post("/api/returns", requireAuth, (req, res) => {
           String(line.description || ""),
           qty,
           rate,
+          costPrice,
           amount,
         );
       }
@@ -1766,18 +1832,16 @@ app.post("/api/returns", requireAuth, (req, res) => {
           debit: 0,
           credit: netTotal,
         });
-        if (returnedCost > 0) {
-          entries.push({
-            account_id: requireAccountIdByCode(ACCOUNT_CODES.finishedInventory),
-            debit: round2(returnedCost),
-            credit: 0,
-          });
-          entries.push({
-            account_id: requireAccountIdByCode(ACCOUNT_CODES.costOfGoodsSold),
-            debit: 0,
-            credit: round2(returnedCost),
-          });
-        }
+        entries.push({
+          account_id: requireAccountIdByCode(ACCOUNT_CODES.finishedInventory),
+          debit: round2(returnedCost),
+          credit: 0,
+        });
+        entries.push({
+          account_id: requireAccountIdByCode(ACCOUNT_CODES.costOfGoodsSold),
+          debit: 0,
+          credit: round2(returnedCost),
+        });
       } else {
         entries.push({
           account_id: resolvePartyAccountId("supplier", supplierId),
