@@ -18,6 +18,7 @@ let apiUrl;
 let uiUrl;
 let apiProcess;
 let uiProcess;
+const useBuiltApp = process.env.PAINTFLOW_E2E_BUILT === "1";
 
 function captureOutput(child) {
   let output = "";
@@ -59,8 +60,11 @@ async function stop(child) {
 test.beforeAll(async () => {
   dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "paintflow-stage4-e2e-"));
   apiPort = await getFreePort();
-  uiPort = await getFreePort();
-  while (uiPort === apiPort) uiPort = await getFreePort();
+  uiPort = apiPort;
+  if (!useBuiltApp) {
+    uiPort = await getFreePort();
+    while (uiPort === apiPort) uiPort = await getFreePort();
+  }
   apiUrl = `http://127.0.0.1:${apiPort}/api`;
   uiUrl = `http://127.0.0.1:${uiPort}`;
   const serverEnv = {
@@ -82,6 +86,8 @@ test.beforeAll(async () => {
   });
   apiProcess.output = captureOutput(apiProcess);
   await waitFor(`${apiUrl}/health`, apiProcess, "API");
+
+  if (useBuiltApp) return;
 
   uiProcess = spawn(
     process.execPath,
@@ -115,19 +121,37 @@ test("first run, ERP workflow, role controls, and every sidebar module at 1366x7
   request,
 }) => {
   const pageErrors = [];
+  const externalRequests = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
+  page.on("request", (browserRequest) => {
+    if (useBuiltApp && new URL(browserRequest.url()).origin !== new URL(uiUrl).origin) {
+      externalRequests.push(browserRequest.url());
+    }
+  });
   page.on("requestfailed", (request) =>
     pageErrors.push(`${request.url()}: ${request.failure()?.errorText}`),
   );
-  const screenshots = path.join(root, "docs", "reports", "screens");
+  const screenshots = useBuiltApp
+    ? path.join(dataDir, "screens")
+    : path.join(root, "docs", "reports", "screens");
   fs.mkdirSync(screenshots, { recursive: true });
 
   const health = await (await request.get(`${apiUrl}/health`)).json();
   expect(health.db).toBe(path.join(dataDir, "paint-erp.db"));
+  expect(health.schema_version).toBeGreaterThan(0);
   expect(await (await request.get(`${apiUrl}/auth/status`)).json()).toEqual({ needsSetup: true });
+  if (useBuiltApp) {
+    for (const route of ["/", "/app/items"]) {
+      const response = await request.get(`${uiUrl}${route}`);
+      expect(response.ok()).toBeTruthy();
+      expect(response.headers()["content-type"]).toContain("text/html");
+      expect(await response.text()).toContain('<html lang="en">');
+    }
+  }
 
   const browserSetupResponse = page.waitForResponse(
-    (response) => response.url() === `${apiUrl}/auth/status`,
+    (response) =>
+      response.url() === `${apiUrl}/auth/status` && response.request().method() === "GET",
   );
   await page.goto(uiUrl);
   const statusResponse = await browserSetupResponse;
@@ -195,8 +219,14 @@ test("first run, ERP workflow, role controls, and every sidebar module at 1366x7
   await expect(page.getByText("New item", { exact: true }).first()).toBeVisible();
 
   const purchaseDataLoaded = Promise.all([
-    page.waitForResponse((response) => response.url() === `${apiUrl}/suppliers`),
-    page.waitForResponse((response) => response.url() === `${apiUrl}/factory-items`),
+    page.waitForResponse(
+      (response) =>
+        response.url() === `${apiUrl}/suppliers` && response.request().method() === "GET",
+    ),
+    page.waitForResponse(
+      (response) =>
+        response.url() === `${apiUrl}/factory-items` && response.request().method() === "GET",
+    ),
   ]);
   await page.getByRole("link", { name: "Purchase", exact: true }).click();
   await purchaseDataLoaded;
@@ -256,8 +286,14 @@ test("first run, ERP workflow, role controls, and every sidebar module at 1366x7
   });
   expect(setupStock.ok()).toBeTruthy();
   const counterSaleDataLoaded = Promise.all([
-    page.waitForResponse((response) => response.url() === `${apiUrl}/setup/customers`),
-    page.waitForResponse((response) => response.url() === `${apiUrl}/particulars`),
+    page.waitForResponse(
+      (response) =>
+        response.url() === `${apiUrl}/setup/customers` && response.request().method() === "GET",
+    ),
+    page.waitForResponse(
+      (response) =>
+        response.url() === `${apiUrl}/particulars` && response.request().method() === "GET",
+    ),
   ]);
   await page.getByRole("link", { name: "Counter Sale" }).click();
   await counterSaleDataLoaded;
@@ -276,8 +312,14 @@ test("first run, ERP workflow, role controls, and every sidebar module at 1366x7
   await expect(page.getByRole("heading", { name: "Counter Sale" })).toBeVisible();
 
   const returnDataLoaded = Promise.all([
-    page.waitForResponse((response) => response.url() === `${apiUrl}/setup/customers`),
-    page.waitForResponse((response) => response.url() === `${apiUrl}/setup/suppliers`),
+    page.waitForResponse(
+      (response) =>
+        response.url() === `${apiUrl}/setup/customers` && response.request().method() === "GET",
+    ),
+    page.waitForResponse(
+      (response) =>
+        response.url() === `${apiUrl}/setup/suppliers` && response.request().method() === "GET",
+    ),
   ]);
   await page.getByRole("link", { name: "Return", exact: true }).click();
   await returnDataLoaded;
@@ -412,4 +454,5 @@ test("first run, ERP workflow, role controls, and every sidebar module at 1366x7
   expect(trial.ok()).toBeTruthy();
   expect((await trial.json()).balanced).toBeTruthy();
   expect(pageErrors).toEqual([]);
+  expect(externalRequests).toEqual([]);
 });

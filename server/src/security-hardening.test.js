@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { after, test } from "node:test";
 import fs from "node:fs";
+import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -36,6 +37,65 @@ test("the server defaults to loopback when HOST is unset", () => {
   assert.equal(result.stdout.trim(), "127.0.0.1");
 });
 
+test("the default data directory is under the operating system user data root", () => {
+  const userDataRoot = path.join(dataDir, "user-data");
+  const env = { ...process.env, LOCALAPPDATA: userDataRoot };
+  delete env.DATA_DIR;
+  delete env.DB_PATH;
+  delete env.BACKUP_DIR;
+  delete env.LOGS_DIR;
+  const result = spawnSync(
+    process.execPath,
+    [
+      "--input-type=module",
+      "--eval",
+      "import('./config.js').then(({ DATA_DIR }) => console.log(DATA_DIR))",
+    ],
+    { cwd: new URL(".", import.meta.url), env, encoding: "utf8" },
+  );
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout.trim(), path.join(userDataRoot, "PaintFlow ERP"));
+});
+
+test("a busy listen port exits with an actionable message", async () => {
+  const occupiedServer = net.createServer();
+  await new Promise((resolve, reject) => {
+    occupiedServer.once("error", reject);
+    occupiedServer.listen(0, "127.0.0.1", resolve);
+  });
+  const address = occupiedServer.address();
+  assert.ok(address && typeof address !== "string");
+  const serverDir = new URL(".", import.meta.url);
+  const env = {
+    ...process.env,
+    HOST: "127.0.0.1",
+    PORT: String(address.port),
+    DATA_DIR: path.join(dataDir, "busy-port"),
+    DB_PATH: path.join(dataDir, "busy-port", "paint-erp.db"),
+    BACKUP_DIR: path.join(dataDir, "busy-port", "backups"),
+    LOGS_DIR: path.join(dataDir, "busy-port", "logs"),
+  };
+
+  let result;
+  try {
+    result = spawnSync(process.execPath, [fileURLToPath(new URL("./index.js", import.meta.url))], {
+      cwd: serverDir,
+      env,
+      encoding: "utf8",
+      timeout: 15_000,
+    });
+  } finally {
+    await new Promise((resolve, reject) =>
+      occupiedServer.close((error) => (error ? reject(error) : resolve())),
+    );
+  }
+
+  assert.equal(result.status, 1, result.stderr);
+  assert.match(result.stderr, new RegExp(`Port ${address.port} is already in use`));
+  assert.match(result.stderr, /Set PORT to an available port/);
+});
+
 test("background server timers do not keep the process alive", () => {
   const source = fs.readFileSync(fileURLToPath(new URL("./index.js", import.meta.url)), "utf8");
   assert.match(
@@ -48,7 +108,7 @@ test("background server timers do not keep the process alive", () => {
 test("production route errors are generic while full error details are logged", () => {
   const priorEnvironment = process.env.NODE_ENV;
   const originalLogger = logger.error;
-  const thrown = new Error("SQLITE_CONSTRAINT: failed at C:\\private\\data.db");
+  const thrown = new Error("SQLITE_CONSTRAINT: failed at /private/data.db");
   let logged;
   let response;
   const res = {
@@ -85,7 +145,7 @@ test("validation errors hide SQL details and filesystem paths", () => {
     publicErrorMessage(new Error("SQLITE_CONSTRAINT: UNIQUE constraint failed")),
     "Request failed",
   );
-  assert.equal(publicErrorMessage(new Error("ENOENT: C:\\private\\database.db")), "Request failed");
+  assert.equal(publicErrorMessage(new Error("ENOENT: /private/database.db")), "Request failed");
   assert.equal(
     publicErrorMessage(new Error("Amount must be a valid number")),
     "Amount must be a valid number",

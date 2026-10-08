@@ -1,11 +1,12 @@
 /**
  * Local Express + SQLite API client.
- * The backend lives in /server and runs at http://localhost:3001 by default.
+ * The backend lives in /server and runs at http://localhost:3001 in development.
  * No cloud services are used anywhere in this project.
  */
 
-export const API_URL =
-  (import.meta.env["VITE_API_URL"] as string | undefined) ?? "http://localhost:3001/api";
+export const API_URL = import.meta.env.DEV
+  ? ((import.meta.env["VITE_API_URL"] as string | undefined) ?? "http://localhost:3001/api")
+  : "/api";
 
 const TOKEN_KEY = "paint-erp.token";
 const USER_KEY = "paint-erp.user";

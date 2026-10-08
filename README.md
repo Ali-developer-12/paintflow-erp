@@ -58,23 +58,28 @@ Use them as your starting point. Do not commit a real `.env` file with credentia
 
 ## Default local data path
 
-The application stores SQLite data under `DATA_DIR`, which defaults to:
+The application stores SQLite data under `DATA_DIR`, which defaults outside the source tree to:
 
 ```text
-server/data/
+%LOCALAPPDATA%\PaintFlow ERP\
 ```
 
-For a client machine, it is recommended to keep the database in a dedicated data folder outside the source tree, such as:
+On Linux and macOS, the default is `$XDG_DATA_HOME/PaintFlow ERP`, or `~/.local/share/PaintFlow ERP` if `XDG_DATA_HOME` is unset. Set `DATA_DIR` to choose another writable location.
 
-```text
-C:\PaintFlowERP\data
+## Production start
+
+Build the static frontend, then start Express. The UI, API, and SPA route fallback share one loopback origin:
+
+```bash
+npm run build
+node server/src/index.js
 ```
+
+The server defaults to `http://127.0.0.1:3001`. Set `PORT` to use a different port. Startup fails with a clear error if the port is already occupied.
 
 ## Backup and restore
 
 Use the built-in backup endpoints or command line helpers to export a verified SQLite snapshot.
-
-Examples:
 
 ```bash
 cd server

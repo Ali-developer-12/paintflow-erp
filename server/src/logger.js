@@ -2,8 +2,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { LOGS_DIR } from "./config.js";
 
-fs.mkdirSync(LOGS_DIR, { recursive: true });
-
 const APP_LOG = path.join(LOGS_DIR, "app.log");
 const ERROR_LOG = path.join(LOGS_DIR, "crash.log");
 

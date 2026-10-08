@@ -1,6 +1,8 @@
 import express from "express";
 import cors from "cors";
 import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import db, { applySchema, DB_PATH, closeDatabase } from "./db.js";
 import {
   cleanupExpiredSessions,
@@ -37,7 +39,7 @@ import { HOST, PORT, ALLOWED_ORIGINS, APP_NAME, APP_VERSION } from "./config.js"
 import { logger } from "./logger.js";
 import { recordAuditLog } from "./audit.js";
 import { sendRouteError } from "./http-errors.js";
-import { runMigrations } from "./migrations.js";
+import { runMigrations, TARGET_SCHEMA_VERSION } from "./migrations.js";
 import erpRoutes from "./erp-routes.js";
 import { finiteNumber, validateNumericPayload } from "./validation.js";
 
@@ -104,6 +106,8 @@ function validateFormulaPayload(particularId, payload) {
 }
 
 const app = express();
+const APP_DIR = path.dirname(fileURLToPath(import.meta.url));
+const WEB_DIR = path.resolve(APP_DIR, "../../dist");
 
 app.use(
   cors({
@@ -165,6 +169,7 @@ app.get("/api/health", (_req, res) => {
     ok: true,
     app: APP_NAME,
     version: APP_VERSION,
+    schema_version: TARGET_SCHEMA_VERSION,
     db: DB_PATH,
     time: new Date().toISOString(),
   });
@@ -2562,6 +2567,18 @@ app.post("/api/backup/verify", requireAuth, requireRole("admin"), (req, res) => 
   }
 });
 
+app.use(express.static(WEB_DIR));
+
+app.use((req, res, next) => {
+  if (req.path === "/api" || req.path.startsWith("/api/")) {
+    return res.status(404).json({ error: "Not found" });
+  }
+  if (req.method !== "GET" && req.method !== "HEAD") return next();
+  res.sendFile(path.join(WEB_DIR, "index.html"), (error) => {
+    if (error) next(error);
+  });
+});
+
 app.use((err, _req, res, _next) => {
   sendRouteError(res, err, 500, "Internal server error");
 });
@@ -2572,6 +2589,16 @@ const server = app.listen(PORT, HOST, () => {
   const port = typeof address === "string" ? PORT : address?.port || PORT;
   console.log(`Paint ERP API listening on http://${host}:${port}`);
   console.log(`SQLite database: ${DB_PATH}`);
+});
+
+server.on("error", (error) => {
+  if (error.code === "EADDRINUSE") {
+    console.error(`Port ${PORT} is already in use on ${HOST}. Set PORT to an available port.`);
+  } else {
+    console.error(`Unable to start the PaintFlow server: ${error.message}`);
+  }
+  closeDatabase();
+  process.exitCode = 1;
 });
 
 function handleShutdown(signal) {
