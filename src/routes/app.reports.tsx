@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   BarChart3,
   Printer,
@@ -50,7 +50,10 @@ type PnLData = {
 type BalanceSheetData = {
   as_of_date: string;
   assets: { items: { id: number; code: string; name: string; balance: number }[]; total: number };
-  liabilities: { items: { id: number; code: string; name: string; balance: number }[]; total: number };
+  liabilities: {
+    items: { id: number; code: string; name: string; balance: number }[];
+    total: number;
+  };
   equity: {
     items: { id: number; code: string; name: string; balance: number }[];
     current_net_profit: number;
@@ -62,12 +65,29 @@ type BalanceSheetData = {
 
 type StockValuationData = {
   raw_materials: {
-    items: { id: number; code: string; name: string; unit: string; rate: number; stock_qty: number; total_value: number }[];
+    items: {
+      id: number;
+      code: string;
+      name: string;
+      unit: string;
+      rate: number;
+      stock_qty: number;
+      total_value: number;
+    }[];
     total_value: number;
     count: number;
   };
   finished_goods: {
-    items: { id: number; item_name: string; type: string; cost_price: number; sale_price: number; stock_qty: number; cost_value: number; retail_value: number }[];
+    items: {
+      id: number;
+      item_name: string;
+      type: string;
+      cost_price: number;
+      sale_price: number;
+      stock_qty: number;
+      cost_value: number;
+      retail_value: number;
+    }[];
     total_cost_value: number;
     total_retail_value: number;
     count: number;
@@ -76,7 +96,10 @@ type StockValuationData = {
 };
 
 const formatAmount = (val: number) =>
-  Number(val || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  Number(val || 0).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 
 export const Route = createFileRoute("/app/reports")({
   component: ReportsPage,
@@ -92,7 +115,7 @@ function ReportsPage() {
   const [valuation, setValuation] = useState<StockValuationData | null>(null);
   const [loading, setLoading] = useState(false);
 
-  async function loadReport() {
+  const loadReport = useCallback(async () => {
     setLoading(true);
     try {
       if (reportType === "sales" || reportType === "purchases") {
@@ -125,11 +148,11 @@ function ReportsPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [from, reportType, to]);
 
   useEffect(() => {
     void loadReport();
-  }, [reportType]);
+  }, [loadReport]);
 
   return (
     <div className="flex-1 space-y-5 p-6">
@@ -219,7 +242,9 @@ function ReportsPage() {
                 <tr>
                   <th className="px-3 py-2.5">Date</th>
                   <th className="px-3 py-2.5">Voucher #</th>
-                  <th className="px-3 py-2.5">{reportType === "sales" ? "Customer" : "Supplier"}</th>
+                  <th className="px-3 py-2.5">
+                    {reportType === "sales" ? "Customer" : "Supplier"}
+                  </th>
                   <th className="px-3 py-2.5 text-right">Amount (Rs)</th>
                 </tr>
               </thead>
@@ -235,7 +260,9 @@ function ReportsPage() {
                     <tr key={row.id} className="hover:bg-muted/30">
                       <td className="px-3 py-2">{row.date}</td>
                       <td className="px-3 py-2 font-mono text-xs">{row.voucher_no}</td>
-                      <td className="px-3 py-2 font-medium">{row.party_name ?? "Counter Customer"}</td>
+                      <td className="px-3 py-2 font-medium">
+                        {row.party_name ?? "Counter Customer"}
+                      </td>
                       <td className="px-3 py-2 text-right font-mono font-semibold">
                         {formatAmount(row.total_amount ?? 0)}
                       </td>
@@ -250,7 +277,10 @@ function ReportsPage() {
                       Grand Total:
                     </td>
                     <td className="px-3 py-2.5 text-right font-mono text-base text-primary">
-                      Rs {formatAmount(rows.reduce((sum, r) => sum + (Number(r.total_amount) || 0), 0))}
+                      Rs{" "}
+                      {formatAmount(
+                        rows.reduce((sum, r) => sum + (Number(r.total_amount) || 0), 0),
+                      )}
                     </td>
                   </tr>
                 </tfoot>
@@ -271,7 +301,9 @@ function ReportsPage() {
 
             {/* Operating Revenue */}
             <div className="space-y-2">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Operating Revenue</h3>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Operating Revenue
+              </h3>
               <div className="rounded-md border border-border divide-y divide-border text-sm">
                 <div className="flex justify-between px-4 py-2">
                   <span>Gross Sales</span>
@@ -290,7 +322,9 @@ function ReportsPage() {
 
             {/* Cost of Goods Sold */}
             <div className="space-y-2">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Cost of Sales</h3>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Cost of Sales
+              </h3>
               <div className="rounded-md border border-border divide-y divide-border text-sm">
                 <div className="flex justify-between px-4 py-2 text-rose-600">
                   <span>Cost of Goods Sold (Raw materials & production overheads)</span>
@@ -298,7 +332,9 @@ function ReportsPage() {
                 </div>
                 <div className="flex justify-between px-4 py-2.5 font-bold bg-muted/30">
                   <span>Gross Profit</span>
-                  <span className={`font-mono ${pnl.gross_profit >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                  <span
+                    className={`font-mono ${pnl.gross_profit >= 0 ? "text-emerald-600" : "text-rose-600"}`}
+                  >
                     Rs {formatAmount(pnl.gross_profit)}
                   </span>
                 </div>
@@ -307,21 +343,29 @@ function ReportsPage() {
 
             {/* Operating Expenses */}
             <div className="space-y-2">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Operating Expenses</h3>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Operating Expenses
+              </h3>
               <div className="rounded-md border border-border divide-y divide-border text-sm">
                 {pnl.expenses.breakdown.length === 0 ? (
-                  <div className="px-4 py-3 text-muted-foreground text-xs italic">No operating expenses recorded.</div>
+                  <div className="px-4 py-3 text-muted-foreground text-xs italic">
+                    No operating expenses recorded.
+                  </div>
                 ) : (
                   pnl.expenses.breakdown.map((exp) => (
                     <div key={exp.id} className="flex justify-between px-4 py-2">
-                      <span>{exp.code} - {exp.name}</span>
+                      <span>
+                        {exp.code} - {exp.name}
+                      </span>
                       <span className="font-mono">{formatAmount(exp.amount)}</span>
                     </div>
                   ))
                 )}
                 <div className="flex justify-between px-4 py-2.5 font-bold bg-muted/30">
                   <span>Total Operating Expenses</span>
-                  <span className="font-mono text-rose-600">Rs {formatAmount(pnl.expenses.total_expenses)}</span>
+                  <span className="font-mono text-rose-600">
+                    Rs {formatAmount(pnl.expenses.total_expenses)}
+                  </span>
                 </div>
               </div>
             </div>
@@ -329,7 +373,9 @@ function ReportsPage() {
             {/* Net Profit / Loss */}
             <div className="rounded-lg border-2 border-primary bg-primary/5 p-4 flex justify-between items-center text-lg font-bold">
               <span>NET PROFIT / (LOSS)</span>
-              <span className={`font-mono text-xl ${pnl.net_profit >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+              <span
+                className={`font-mono text-xl ${pnl.net_profit >= 0 ? "text-emerald-600" : "text-rose-600"}`}
+              >
                 Rs {formatAmount(pnl.net_profit)}
               </span>
             </div>
@@ -356,11 +402,15 @@ function ReportsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Assets Column */}
               <div className="space-y-3">
-                <h3 className="font-bold text-sm uppercase tracking-wider text-muted-foreground">Assets</h3>
+                <h3 className="font-bold text-sm uppercase tracking-wider text-muted-foreground">
+                  Assets
+                </h3>
                 <div className="rounded-md border border-border divide-y divide-border text-sm">
                   {balanceSheet.assets.items.map((a) => (
                     <div key={a.id} className="flex justify-between px-3 py-2">
-                      <span>{a.code} - {a.name}</span>
+                      <span>
+                        {a.code} - {a.name}
+                      </span>
                       <span className="font-mono">{formatAmount(a.balance)}</span>
                     </div>
                   ))}
@@ -374,37 +424,51 @@ function ReportsPage() {
               {/* Liabilities & Equity Column */}
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <h3 className="font-bold text-sm uppercase tracking-wider text-muted-foreground">Liabilities</h3>
+                  <h3 className="font-bold text-sm uppercase tracking-wider text-muted-foreground">
+                    Liabilities
+                  </h3>
                   <div className="rounded-md border border-border divide-y divide-border text-sm">
                     {balanceSheet.liabilities.items.map((l) => (
                       <div key={l.id} className="flex justify-between px-3 py-2">
-                        <span>{l.code} - {l.name}</span>
+                        <span>
+                          {l.code} - {l.name}
+                        </span>
                         <span className="font-mono">{formatAmount(l.balance)}</span>
                       </div>
                     ))}
                     <div className="flex justify-between px-3 py-2 font-semibold bg-muted/20">
                       <span>Total Liabilities</span>
-                      <span className="font-mono">Rs {formatAmount(balanceSheet.liabilities.total)}</span>
+                      <span className="font-mono">
+                        Rs {formatAmount(balanceSheet.liabilities.total)}
+                      </span>
                     </div>
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <h3 className="font-bold text-sm uppercase tracking-wider text-muted-foreground">Equity</h3>
+                  <h3 className="font-bold text-sm uppercase tracking-wider text-muted-foreground">
+                    Equity
+                  </h3>
                   <div className="rounded-md border border-border divide-y divide-border text-sm">
                     {balanceSheet.equity.items.map((eq) => (
                       <div key={eq.id} className="flex justify-between px-3 py-2">
-                        <span>{eq.code} - {eq.name}</span>
+                        <span>
+                          {eq.code} - {eq.name}
+                        </span>
                         <span className="font-mono">{formatAmount(eq.balance)}</span>
                       </div>
                     ))}
                     <div className="flex justify-between px-3 py-2 text-emerald-600">
                       <span>Retained Net Earnings / Profit</span>
-                      <span className="font-mono">{formatAmount(balanceSheet.equity.current_net_profit)}</span>
+                      <span className="font-mono">
+                        {formatAmount(balanceSheet.equity.current_net_profit)}
+                      </span>
                     </div>
                     <div className="flex justify-between px-3 py-2 font-semibold bg-muted/20">
                       <span>Total Equity</span>
-                      <span className="font-mono">Rs {formatAmount(balanceSheet.equity.total_equity)}</span>
+                      <span className="font-mono">
+                        Rs {formatAmount(balanceSheet.equity.total_equity)}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -425,21 +489,34 @@ function ReportsPage() {
           <div className="space-y-6 pt-2">
             <div className="flex flex-wrap items-center justify-between bg-primary/10 rounded-lg p-4 border border-primary/20">
               <div>
-                <p className="text-xs font-semibold uppercase text-muted-foreground">Total Inventory Cost Valuation</p>
+                <p className="text-xs font-semibold uppercase text-muted-foreground">
+                  Total Inventory Cost Valuation
+                </p>
                 <p className="text-2xl font-bold font-mono text-primary">
                   Rs {formatAmount(valuation.total_inventory_cost_value)}
                 </p>
               </div>
               <div className="text-right text-xs text-muted-foreground">
-                <p>Raw Materials: <strong>Rs {formatAmount(valuation.raw_materials.total_value)}</strong></p>
-                <p>Finished Goods (Cost): <strong>Rs {formatAmount(valuation.finished_goods.total_cost_value)}</strong></p>
-                <p>Finished Goods (Retail): <strong>Rs {formatAmount(valuation.finished_goods.total_retail_value)}</strong></p>
+                <p>
+                  Raw Materials:{" "}
+                  <strong>Rs {formatAmount(valuation.raw_materials.total_value)}</strong>
+                </p>
+                <p>
+                  Finished Goods (Cost):{" "}
+                  <strong>Rs {formatAmount(valuation.finished_goods.total_cost_value)}</strong>
+                </p>
+                <p>
+                  Finished Goods (Retail):{" "}
+                  <strong>Rs {formatAmount(valuation.finished_goods.total_retail_value)}</strong>
+                </p>
               </div>
             </div>
 
             {/* Raw Materials Grid */}
             <div className="space-y-2">
-              <h3 className="font-bold text-sm">Raw Materials Inventory ({valuation.raw_materials.count} items)</h3>
+              <h3 className="font-bold text-sm">
+                Raw Materials Inventory ({valuation.raw_materials.count} items)
+              </h3>
               <div className="overflow-x-auto rounded-md border border-border">
                 <table className="w-full text-sm">
                   <thead className="bg-muted/50 text-left border-b border-border">
@@ -457,7 +534,9 @@ function ReportsPage() {
                         <td className="px-3 py-2 text-right font-mono">
                           {formatAmount(item.stock_qty)} {item.unit}
                         </td>
-                        <td className="px-3 py-2 text-right font-mono text-xs">{formatAmount(item.rate)}</td>
+                        <td className="px-3 py-2 text-right font-mono text-xs">
+                          {formatAmount(item.rate)}
+                        </td>
                         <td className="px-3 py-2 text-right font-mono font-semibold">
                           {formatAmount(item.total_value)}
                         </td>
@@ -466,7 +545,9 @@ function ReportsPage() {
                   </tbody>
                   <tfoot className="bg-muted/40 font-bold border-t border-border">
                     <tr>
-                      <td colSpan={3} className="px-3 py-2 text-right">Subtotal Raw Inventory:</td>
+                      <td colSpan={3} className="px-3 py-2 text-right">
+                        Subtotal Raw Inventory:
+                      </td>
                       <td className="px-3 py-2 text-right font-mono">
                         Rs {formatAmount(valuation.raw_materials.total_value)}
                       </td>
@@ -478,7 +559,9 @@ function ReportsPage() {
 
             {/* Finished Goods Grid */}
             <div className="space-y-2">
-              <h3 className="font-bold text-sm">Finished Goods Inventory ({valuation.finished_goods.count} products)</h3>
+              <h3 className="font-bold text-sm">
+                Finished Goods Inventory ({valuation.finished_goods.count} products)
+              </h3>
               <div className="overflow-x-auto rounded-md border border-border">
                 <table className="w-full text-sm">
                   <thead className="bg-muted/50 text-left border-b border-border">
@@ -497,9 +580,15 @@ function ReportsPage() {
                       <tr key={prod.id} className="hover:bg-muted/30">
                         <td className="px-3 py-2 font-medium">{prod.item_name}</td>
                         <td className="px-3 py-2 text-xs text-muted-foreground">{prod.type}</td>
-                        <td className="px-3 py-2 text-right font-mono">{formatAmount(prod.stock_qty)}</td>
-                        <td className="px-3 py-2 text-right font-mono text-xs">{formatAmount(prod.cost_price)}</td>
-                        <td className="px-3 py-2 text-right font-mono text-xs">{formatAmount(prod.sale_price)}</td>
+                        <td className="px-3 py-2 text-right font-mono">
+                          {formatAmount(prod.stock_qty)}
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono text-xs">
+                          {formatAmount(prod.cost_price)}
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono text-xs">
+                          {formatAmount(prod.sale_price)}
+                        </td>
                         <td className="px-3 py-2 text-right font-mono font-semibold">
                           {formatAmount(prod.cost_value)}
                         </td>
@@ -511,7 +600,9 @@ function ReportsPage() {
                   </tbody>
                   <tfoot className="bg-muted/40 font-bold border-t border-border">
                     <tr>
-                      <td colSpan={5} className="px-3 py-2 text-right">Subtotal Finished Inventory:</td>
+                      <td colSpan={5} className="px-3 py-2 text-right">
+                        Subtotal Finished Inventory:
+                      </td>
                       <td className="px-3 py-2 text-right font-mono">
                         Rs {formatAmount(valuation.finished_goods.total_cost_value)}
                       </td>

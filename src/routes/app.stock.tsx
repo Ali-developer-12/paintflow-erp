@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Boxes, Plus, SlidersHorizontal, Archive, RefreshCcw, X } from "lucide-react";
 import { apiGet, apiPost } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -71,7 +71,10 @@ type OpeningStockRecord = {
 export const Route = createFileRoute("/app/stock")({ component: StockPage });
 
 const quantity = (value: number) =>
-  Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  Number(value || 0).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 
 function StockPage() {
   const [activeTab, setActiveTab] = useState("overview");
@@ -118,7 +121,7 @@ function StockPage() {
     [itemId, stockType, from, to],
   );
 
-  async function loadStockData() {
+  const loadStockData = useCallback(async () => {
     setLoading(true);
     try {
       const [stockItems, ledgerData] = await Promise.all([
@@ -132,39 +135,41 @@ function StockPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [query]);
 
-  async function loadAdjustments() {
+  const loadAdjustments = useCallback(async () => {
     try {
       const rows = await apiGet<StockAdjustment[]>("/stock/adjustments");
       setAdjustments(rows);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to load adjustments");
     }
-  }
+  }, []);
 
-  async function loadOpeningStocks() {
+  const loadOpeningStocks = useCallback(async () => {
     try {
       const rows = await apiGet<OpeningStockRecord[]>("/stock/opening");
       setOpeningStocks(rows);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to load opening stock records");
     }
-  }
+  }, []);
 
   useEffect(() => {
     void loadStockData();
-  }, [query]);
+  }, [loadStockData]);
 
   useEffect(() => {
     if (activeTab === "adjustments") void loadAdjustments();
     if (activeTab === "opening") void loadOpeningStocks();
-  }, [activeTab]);
+  }, [activeTab, loadAdjustments, loadOpeningStocks]);
 
   // Selected item for Adjustment preview
   const selectedAdjItem = useMemo(() => {
     if (!adjForm.item_id) return null;
-    return items.find((i) => i.stock_type === adjForm.item_type && i.id === Number(adjForm.item_id));
+    return items.find(
+      (i) => i.stock_type === adjForm.item_type && i.id === Number(adjForm.item_id),
+    );
   }, [items, adjForm.item_type, adjForm.item_id]);
 
   const adjResultingQty = useMemo(() => {
@@ -318,12 +323,16 @@ function StockPage() {
                     </tr>
                   ) : (
                     items.map((item) => {
-                      const isLow = Number(item.min_qty) > 0 && Number(item.stock_qty) < Number(item.min_qty);
-                      const isOver = Number(item.max_qty) > 0 && Number(item.stock_qty) > Number(item.max_qty);
+                      const isLow =
+                        Number(item.min_qty) > 0 && Number(item.stock_qty) < Number(item.min_qty);
+                      const isOver =
+                        Number(item.max_qty) > 0 && Number(item.stock_qty) > Number(item.max_qty);
                       return (
                         <tr key={`${item.stock_type}-${item.id}`} className="hover:bg-muted/30">
                           <td className="px-3 py-2 font-medium">{item.name}</td>
-                          <td className="px-3 py-2 capitalize text-xs text-muted-foreground">{item.stock_type}</td>
+                          <td className="px-3 py-2 capitalize text-xs text-muted-foreground">
+                            {item.stock_type}
+                          </td>
                           <td className="px-3 py-2 text-right font-mono font-semibold">
                             {quantity(item.stock_qty)} {item.unit}
                           </td>
@@ -423,7 +432,9 @@ function StockPage() {
                         <td className="px-3 py-2">{r.date}</td>
                         <td className="px-3 py-2 font-medium">{r.item_name}</td>
                         <td className="px-3 py-2 capitalize text-xs">
-                          <span className="bg-muted px-2 py-0.5 rounded font-mono">{r.ref_type}</span>
+                          <span className="bg-muted px-2 py-0.5 rounded font-mono">
+                            {r.ref_type}
+                          </span>
                         </td>
                         <td className="px-3 py-2 text-xs font-mono">{r.ref_no || "—"}</td>
                         <td className="px-3 py-2 text-right font-mono text-emerald-600">
@@ -460,7 +471,10 @@ function StockPage() {
           </div>
 
           {showAdjForm && (
-            <form onSubmit={submitAdjustment} className="rounded-lg border border-border bg-card p-5 space-y-4">
+            <form
+              onSubmit={submitAdjustment}
+              className="rounded-lg border border-border bg-card p-5 space-y-4"
+            >
               <h3 className="font-semibold text-sm">Post Stock Adjustment</h3>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
@@ -469,7 +483,11 @@ function StockPage() {
                     className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                     value={adjForm.item_type}
                     onChange={(e) =>
-                      setAdjForm({ ...adjForm, item_type: e.target.value as "raw" | "finished", item_id: "" })
+                      setAdjForm({
+                        ...adjForm,
+                        item_type: e.target.value as "raw" | "finished",
+                        item_id: "",
+                      })
                     }
                   >
                     <option value="raw">Raw Material</option>
@@ -504,7 +522,9 @@ function StockPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-medium block mb-1">Adjustment Qty (+ or -) *</label>
+                  <label className="text-xs font-medium block mb-1">
+                    Adjustment Qty (+ or -) *
+                  </label>
                   <Input
                     type="number"
                     step="0.01"
@@ -528,23 +548,39 @@ function StockPage() {
               {selectedAdjItem && adjForm.adjustment_qty && (
                 <div className="rounded-md bg-muted/60 p-3 text-xs flex flex-wrap items-center gap-6">
                   <div>
-                    Previous Stock: <strong>{quantity(selectedAdjItem.stock_qty)} {selectedAdjItem.unit}</strong>
+                    Previous Stock:{" "}
+                    <strong>
+                      {quantity(selectedAdjItem.stock_qty)} {selectedAdjItem.unit}
+                    </strong>
                   </div>
                   <div>
                     Adjustment:{" "}
-                    <strong className={Number(adjForm.adjustment_qty) > 0 ? "text-emerald-600" : "text-rose-600"}>
-                      {Number(adjForm.adjustment_qty) > 0 ? `+${adjForm.adjustment_qty}` : adjForm.adjustment_qty}{" "}
+                    <strong
+                      className={
+                        Number(adjForm.adjustment_qty) > 0 ? "text-emerald-600" : "text-rose-600"
+                      }
+                    >
+                      {Number(adjForm.adjustment_qty) > 0
+                        ? `+${adjForm.adjustment_qty}`
+                        : adjForm.adjustment_qty}{" "}
                       {selectedAdjItem.unit}
                     </strong>
                   </div>
                   <div>
                     Resulting Stock:{" "}
-                    <strong className={adjResultingQty !== null && adjResultingQty < 0 ? "text-destructive" : ""}>
-                      {adjResultingQty !== null ? quantity(adjResultingQty) : "—"} {selectedAdjItem.unit}
+                    <strong
+                      className={
+                        adjResultingQty !== null && adjResultingQty < 0 ? "text-destructive" : ""
+                      }
+                    >
+                      {adjResultingQty !== null ? quantity(adjResultingQty) : "—"}{" "}
+                      {selectedAdjItem.unit}
                     </strong>
                   </div>
                   {adjResultingQty !== null && adjResultingQty < 0 && (
-                    <span className="text-destructive font-bold">⚠ Error: Cannot drive stock negative!</span>
+                    <span className="text-destructive font-bold">
+                      ⚠ Error: Cannot drive stock negative!
+                    </span>
                   )}
                 </div>
               )}
@@ -553,7 +589,10 @@ function StockPage() {
                 <Button type="button" variant="outline" onClick={() => setShowAdjForm(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" disabled={submitting || (adjResultingQty !== null && adjResultingQty < 0)}>
+                <Button
+                  type="submit"
+                  disabled={submitting || (adjResultingQty !== null && adjResultingQty < 0)}
+                >
                   {submitting ? "Posting..." : "Commit Stock Adjustment"}
                 </Button>
               </div>
@@ -589,7 +628,8 @@ function StockPage() {
                       <td className="px-3 py-2">{a.date}</td>
                       <td className="px-3 py-2 capitalize text-xs">{a.item_type}</td>
                       <td className="px-3 py-2 font-medium">
-                        {a.factory_item_name || a.item_name} {a.particular_type ? `(${a.particular_type})` : ""}
+                        {a.factory_item_name || a.item_name}{" "}
+                        {a.particular_type ? `(${a.particular_type})` : ""}
                       </td>
                       <td className="px-3 py-2 text-right font-mono text-muted-foreground">
                         {quantity(a.previous_qty)}
@@ -599,9 +639,13 @@ function StockPage() {
                           a.adjustment_qty > 0 ? "text-emerald-600" : "text-rose-600"
                         }`}
                       >
-                        {a.adjustment_qty > 0 ? `+${quantity(a.adjustment_qty)}` : quantity(a.adjustment_qty)}
+                        {a.adjustment_qty > 0
+                          ? `+${quantity(a.adjustment_qty)}`
+                          : quantity(a.adjustment_qty)}
                       </td>
-                      <td className="px-3 py-2 text-right font-mono font-bold">{quantity(a.resulting_qty)}</td>
+                      <td className="px-3 py-2 text-right font-mono font-bold">
+                        {quantity(a.resulting_qty)}
+                      </td>
                       <td className="px-3 py-2 text-xs text-muted-foreground">{a.reason}</td>
                       <td className="px-3 py-2 text-xs">{a.username || "System"}</td>
                     </tr>
@@ -628,7 +672,10 @@ function StockPage() {
           </div>
 
           {showOpnForm && (
-            <form onSubmit={submitOpeningStock} className="rounded-lg border border-border bg-card p-5 space-y-4">
+            <form
+              onSubmit={submitOpeningStock}
+              className="rounded-lg border border-border bg-card p-5 space-y-4"
+            >
               <h3 className="font-semibold text-sm">Post Opening Stock Balance</h3>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
@@ -637,7 +684,11 @@ function StockPage() {
                     className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                     value={opnForm.item_type}
                     onChange={(e) =>
-                      setOpnForm({ ...opnForm, item_type: e.target.value as "raw" | "finished", item_id: "" })
+                      setOpnForm({
+                        ...opnForm,
+                        item_type: e.target.value as "raw" | "finished",
+                        item_id: "",
+                      })
                     }
                   >
                     <option value="raw">Raw Material</option>
@@ -743,16 +794,21 @@ function StockPage() {
                       <td className="px-3 py-2">{o.date}</td>
                       <td className="px-3 py-2 capitalize text-xs">{o.item_type}</td>
                       <td className="px-3 py-2 font-medium">
-                        {o.factory_item_name || o.item_name} {o.particular_type ? `(${o.particular_type})` : ""}
+                        {o.factory_item_name || o.item_name}{" "}
+                        {o.particular_type ? `(${o.particular_type})` : ""}
                       </td>
                       <td className="px-3 py-2 text-right font-mono font-semibold">
                         {quantity(o.qty)} {o.factory_item_unit || ""}
                       </td>
-                      <td className="px-3 py-2 text-right font-mono text-xs">{quantity(o.unit_cost)}</td>
+                      <td className="px-3 py-2 text-right font-mono text-xs">
+                        {quantity(o.unit_cost)}
+                      </td>
                       <td className="px-3 py-2 text-right font-mono font-bold text-emerald-600">
                         {quantity(o.total_value)}
                       </td>
-                      <td className="px-3 py-2 text-xs text-muted-foreground">{o.remarks || "—"}</td>
+                      <td className="px-3 py-2 text-xs text-muted-foreground">
+                        {o.remarks || "—"}
+                      </td>
                     </tr>
                   ))
                 )}

@@ -97,6 +97,20 @@ type JournalLine = {
   narration: string;
 };
 
+type JournalFormLine = {
+  account_id: string;
+  debit: string;
+  credit: string;
+  narration: string;
+};
+
+const createEmptyJournalLine = (): JournalFormLine => ({
+  account_id: "",
+  debit: "",
+  credit: "",
+  narration: "",
+});
+
 type Journal = {
   id: number;
   voucher_no: string;
@@ -135,7 +149,10 @@ type PartyLedger = {
 };
 
 const formatAmount = (value: number) =>
-  Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  Number(value || 0).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 
 export const Route = createFileRoute("/app/accounts")({ component: AccountsPage });
 
@@ -198,14 +215,16 @@ function AccountsPage() {
   // Journal State
   const [journals, setJournals] = useState<Journal[]>([]);
   const [showJournalForm, setShowJournalForm] = useState(false);
-  const [journalForm, setJournalForm] = useState({
+  const [journalForm, setJournalForm] = useState<{
+    date: string;
+    reference_no: string;
+    remarks: string;
+    lines: JournalFormLine[];
+  }>({
     date: new Date().toISOString().slice(0, 10),
     reference_no: "",
     remarks: "",
-    lines: [
-      { account_id: "", debit: "", credit: "", narration: "" },
-      { account_id: "", debit: "", credit: "", narration: "" },
-    ],
+    lines: [createEmptyJournalLine(), createEmptyJournalLine()],
   });
 
   // Party Ledger State
@@ -298,9 +317,13 @@ function AccountsPage() {
       setLedger(null);
       return;
     }
-    void apiGet<PartyLedger>(`/reports/statements?party_type=${partyType}&party_id=${selectedPartyId}`)
+    void apiGet<PartyLedger>(
+      `/reports/statements?party_type=${partyType}&party_id=${selectedPartyId}`,
+    )
       .then(setLedger)
-      .catch((err: unknown) => toast.error(err instanceof Error ? err.message : "Failed to load statement"));
+      .catch((err: unknown) =>
+        toast.error(err instanceof Error ? err.message : "Failed to load statement"),
+      );
   }, [partyType, selectedPartyId]);
 
   // Handle Receipt Submission
@@ -476,7 +499,12 @@ function AccountsPage() {
             Customer Receipts, Supplier Payments, Expenses, Income, Journal Vouchers & Statements
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => void loadTabContent(activeTab)} disabled={loading}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => void loadTabContent(activeTab)}
+          disabled={loading}
+        >
           <RefreshCcw className="h-4 w-4 mr-1.5" /> Refresh
         </Button>
       </div>
@@ -517,7 +545,10 @@ function AccountsPage() {
           </div>
 
           {showReceiptForm && (
-            <form onSubmit={submitReceipt} className="rounded-lg border border-border bg-card p-5 space-y-4">
+            <form
+              onSubmit={submitReceipt}
+              className="rounded-lg border border-border bg-card p-5 space-y-4"
+            >
               <h3 className="font-semibold text-sm">Post New Customer Receipt</h3>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
@@ -525,7 +556,9 @@ function AccountsPage() {
                   <select
                     className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                     value={receiptForm.customer_id}
-                    onChange={(e) => setReceiptForm({ ...receiptForm, customer_id: e.target.value })}
+                    onChange={(e) =>
+                      setReceiptForm({ ...receiptForm, customer_id: e.target.value })
+                    }
                     required
                   >
                     <option value="">Select customer...</option>
@@ -546,11 +579,15 @@ function AccountsPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-medium block mb-1">Deposit Into (Cash/Bank) *</label>
+                  <label className="text-xs font-medium block mb-1">
+                    Deposit Into (Cash/Bank) *
+                  </label>
                   <select
                     className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                     value={receiptForm.payment_account_id}
-                    onChange={(e) => setReceiptForm({ ...receiptForm, payment_account_id: e.target.value })}
+                    onChange={(e) =>
+                      setReceiptForm({ ...receiptForm, payment_account_id: e.target.value })
+                    }
                     required
                   >
                     <option value="">Select payment account...</option>
@@ -578,7 +615,9 @@ function AccountsPage() {
                   <select
                     className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                     value={receiptForm.payment_mode}
-                    onChange={(e) => setReceiptForm({ ...receiptForm, payment_mode: e.target.value })}
+                    onChange={(e) =>
+                      setReceiptForm({ ...receiptForm, payment_mode: e.target.value })
+                    }
                   >
                     <option value="cash">Cash</option>
                     <option value="bank">Bank Transfer / Cheque</option>
@@ -590,7 +629,9 @@ function AccountsPage() {
                   <Input
                     placeholder="Ref # or Cheque #"
                     value={receiptForm.reference_no}
-                    onChange={(e) => setReceiptForm({ ...receiptForm, reference_no: e.target.value })}
+                    onChange={(e) =>
+                      setReceiptForm({ ...receiptForm, reference_no: e.target.value })
+                    }
                   />
                 </div>
                 <div className="md:col-span-2">
@@ -640,12 +681,16 @@ function AccountsPage() {
                       <td className="px-3 py-2 font-mono font-medium text-xs">{r.voucher_no}</td>
                       <td className="px-3 py-2">{r.date}</td>
                       <td className="px-3 py-2 font-medium">{r.customer_name}</td>
-                      <td className="px-3 py-2 text-xs text-muted-foreground">{r.payment_account_name}</td>
+                      <td className="px-3 py-2 text-xs text-muted-foreground">
+                        {r.payment_account_name}
+                      </td>
                       <td className="px-3 py-2 text-right font-semibold tabular-nums text-emerald-600">
                         {formatAmount(r.amount)}
                       </td>
                       <td className="px-3 py-2 text-xs">{r.reference_no || "—"}</td>
-                      <td className="px-3 py-2 text-xs text-muted-foreground">{r.remarks || "—"}</td>
+                      <td className="px-3 py-2 text-xs text-muted-foreground">
+                        {r.remarks || "—"}
+                      </td>
                       <td className="px-3 py-2 text-center">
                         <Button
                           variant="ghost"
@@ -685,7 +730,10 @@ function AccountsPage() {
           </div>
 
           {showPaymentForm && (
-            <form onSubmit={submitPayment} className="rounded-lg border border-border bg-card p-5 space-y-4">
+            <form
+              onSubmit={submitPayment}
+              className="rounded-lg border border-border bg-card p-5 space-y-4"
+            >
               <h3 className="font-semibold text-sm">Post New Supplier Payment</h3>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
@@ -693,7 +741,9 @@ function AccountsPage() {
                   <select
                     className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                     value={paymentForm.supplier_id}
-                    onChange={(e) => setPaymentForm({ ...paymentForm, supplier_id: e.target.value })}
+                    onChange={(e) =>
+                      setPaymentForm({ ...paymentForm, supplier_id: e.target.value })
+                    }
                     required
                   >
                     <option value="">Select supplier...</option>
@@ -718,7 +768,9 @@ function AccountsPage() {
                   <select
                     className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                     value={paymentForm.payment_account_id}
-                    onChange={(e) => setPaymentForm({ ...paymentForm, payment_account_id: e.target.value })}
+                    onChange={(e) =>
+                      setPaymentForm({ ...paymentForm, payment_account_id: e.target.value })
+                    }
                     required
                   >
                     <option value="">Select payment account...</option>
@@ -746,7 +798,9 @@ function AccountsPage() {
                   <select
                     className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                     value={paymentForm.payment_mode}
-                    onChange={(e) => setPaymentForm({ ...paymentForm, payment_mode: e.target.value })}
+                    onChange={(e) =>
+                      setPaymentForm({ ...paymentForm, payment_mode: e.target.value })
+                    }
                   >
                     <option value="cash">Cash</option>
                     <option value="bank">Bank Transfer / Cheque</option>
@@ -758,7 +812,9 @@ function AccountsPage() {
                   <Input
                     placeholder="Ref # or Cheque #"
                     value={paymentForm.reference_no}
-                    onChange={(e) => setPaymentForm({ ...paymentForm, reference_no: e.target.value })}
+                    onChange={(e) =>
+                      setPaymentForm({ ...paymentForm, reference_no: e.target.value })
+                    }
                   />
                 </div>
                 <div className="md:col-span-2">
@@ -808,12 +864,16 @@ function AccountsPage() {
                       <td className="px-3 py-2 font-mono font-medium text-xs">{p.voucher_no}</td>
                       <td className="px-3 py-2">{p.date}</td>
                       <td className="px-3 py-2 font-medium">{p.supplier_name}</td>
-                      <td className="px-3 py-2 text-xs text-muted-foreground">{p.payment_account_name}</td>
+                      <td className="px-3 py-2 text-xs text-muted-foreground">
+                        {p.payment_account_name}
+                      </td>
                       <td className="px-3 py-2 text-right font-semibold tabular-nums text-rose-600">
                         {formatAmount(p.amount)}
                       </td>
                       <td className="px-3 py-2 text-xs">{p.reference_no || "—"}</td>
-                      <td className="px-3 py-2 text-xs text-muted-foreground">{p.remarks || "—"}</td>
+                      <td className="px-3 py-2 text-xs text-muted-foreground">
+                        {p.remarks || "—"}
+                      </td>
                       <td className="px-3 py-2 text-center">
                         <Button
                           variant="ghost"
@@ -853,7 +913,10 @@ function AccountsPage() {
           </div>
 
           {showExpenseForm && (
-            <form onSubmit={submitExpense} className="rounded-lg border border-border bg-card p-5 space-y-4">
+            <form
+              onSubmit={submitExpense}
+              className="rounded-lg border border-border bg-card p-5 space-y-4"
+            >
               <h3 className="font-semibold text-sm">Record Expense Voucher</h3>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
@@ -861,7 +924,9 @@ function AccountsPage() {
                   <select
                     className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                     value={expenseForm.expense_account_id}
-                    onChange={(e) => setExpenseForm({ ...expenseForm, expense_account_id: e.target.value })}
+                    onChange={(e) =>
+                      setExpenseForm({ ...expenseForm, expense_account_id: e.target.value })
+                    }
                     required
                   >
                     <option value="">Select expense account...</option>
@@ -886,7 +951,9 @@ function AccountsPage() {
                   <select
                     className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                     value={expenseForm.payment_account_id}
-                    onChange={(e) => setExpenseForm({ ...expenseForm, payment_account_id: e.target.value })}
+                    onChange={(e) =>
+                      setExpenseForm({ ...expenseForm, payment_account_id: e.target.value })
+                    }
                     required
                   >
                     <option value="">Select cash/bank account...</option>
@@ -914,7 +981,9 @@ function AccountsPage() {
                   <Input
                     placeholder="Bill / Invoice #"
                     value={expenseForm.reference_no}
-                    onChange={(e) => setExpenseForm({ ...expenseForm, reference_no: e.target.value })}
+                    onChange={(e) =>
+                      setExpenseForm({ ...expenseForm, reference_no: e.target.value })
+                    }
                   />
                 </div>
                 <div className="md:col-span-3">
@@ -963,12 +1032,16 @@ function AccountsPage() {
                       <td className="px-3 py-2 font-mono font-medium text-xs">{e.voucher_no}</td>
                       <td className="px-3 py-2">{e.date}</td>
                       <td className="px-3 py-2 font-medium">{e.expense_account_name}</td>
-                      <td className="px-3 py-2 text-xs text-muted-foreground">{e.payment_account_name}</td>
+                      <td className="px-3 py-2 text-xs text-muted-foreground">
+                        {e.payment_account_name}
+                      </td>
                       <td className="px-3 py-2 text-right font-semibold tabular-nums text-rose-600">
                         {formatAmount(e.amount)}
                       </td>
                       <td className="px-3 py-2 text-xs">{e.reference_no || "—"}</td>
-                      <td className="px-3 py-2 text-xs text-muted-foreground">{e.remarks || "—"}</td>
+                      <td className="px-3 py-2 text-xs text-muted-foreground">
+                        {e.remarks || "—"}
+                      </td>
                     </tr>
                   ))
                 )}
@@ -988,7 +1061,10 @@ function AccountsPage() {
           </div>
 
           {showIncomeForm && (
-            <form onSubmit={submitIncome} className="rounded-lg border border-border bg-card p-5 space-y-4">
+            <form
+              onSubmit={submitIncome}
+              className="rounded-lg border border-border bg-card p-5 space-y-4"
+            >
               <h3 className="font-semibold text-sm">Record Miscellaneous Income</h3>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
@@ -996,7 +1072,9 @@ function AccountsPage() {
                   <select
                     className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                     value={incomeForm.income_account_id}
-                    onChange={(e) => setIncomeForm({ ...incomeForm, income_account_id: e.target.value })}
+                    onChange={(e) =>
+                      setIncomeForm({ ...incomeForm, income_account_id: e.target.value })
+                    }
                     required
                   >
                     <option value="">Select income account...</option>
@@ -1021,7 +1099,9 @@ function AccountsPage() {
                   <select
                     className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                     value={incomeForm.payment_account_id}
-                    onChange={(e) => setIncomeForm({ ...incomeForm, payment_account_id: e.target.value })}
+                    onChange={(e) =>
+                      setIncomeForm({ ...incomeForm, payment_account_id: e.target.value })
+                    }
                     required
                   >
                     <option value="">Select cash/bank account...</option>
@@ -1098,12 +1178,16 @@ function AccountsPage() {
                       <td className="px-3 py-2 font-mono font-medium text-xs">{inc.voucher_no}</td>
                       <td className="px-3 py-2">{inc.date}</td>
                       <td className="px-3 py-2 font-medium">{inc.income_account_name}</td>
-                      <td className="px-3 py-2 text-xs text-muted-foreground">{inc.payment_account_name}</td>
+                      <td className="px-3 py-2 text-xs text-muted-foreground">
+                        {inc.payment_account_name}
+                      </td>
                       <td className="px-3 py-2 text-right font-semibold tabular-nums text-emerald-600">
                         {formatAmount(inc.amount)}
                       </td>
                       <td className="px-3 py-2 text-xs">{inc.reference_no || "—"}</td>
-                      <td className="px-3 py-2 text-xs text-muted-foreground">{inc.remarks || "—"}</td>
+                      <td className="px-3 py-2 text-xs text-muted-foreground">
+                        {inc.remarks || "—"}
+                      </td>
                     </tr>
                   ))
                 )}
@@ -1123,7 +1207,10 @@ function AccountsPage() {
           </div>
 
           {showJournalForm && (
-            <form onSubmit={submitJournal} className="rounded-lg border border-border bg-card p-5 space-y-4">
+            <form
+              onSubmit={submitJournal}
+              className="rounded-lg border border-border bg-card p-5 space-y-4"
+            >
               <h3 className="font-semibold text-sm">Create Double-Entry Journal Voucher</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
@@ -1140,7 +1227,9 @@ function AccountsPage() {
                   <Input
                     placeholder="JV Ref #"
                     value={journalForm.reference_no}
-                    onChange={(e) => setJournalForm({ ...journalForm, reference_no: e.target.value })}
+                    onChange={(e) =>
+                      setJournalForm({ ...journalForm, reference_no: e.target.value })
+                    }
                   />
                 </div>
                 <div>
@@ -1174,7 +1263,9 @@ function AccountsPage() {
                             value={line.account_id}
                             onChange={(e) => {
                               const newLines = [...journalForm.lines];
-                              newLines[idx].account_id = e.target.value;
+                              const targetLine = newLines[idx];
+                              if (!targetLine) return;
+                              targetLine.account_id = e.target.value;
                               setJournalForm({ ...journalForm, lines: newLines });
                             }}
                             required
@@ -1194,7 +1285,9 @@ function AccountsPage() {
                             value={line.narration}
                             onChange={(e) => {
                               const newLines = [...journalForm.lines];
-                              newLines[idx].narration = e.target.value;
+                              const targetLine = newLines[idx];
+                              if (!targetLine) return;
+                              targetLine.narration = e.target.value;
                               setJournalForm({ ...journalForm, lines: newLines });
                             }}
                           />
@@ -1209,8 +1302,10 @@ function AccountsPage() {
                             value={line.debit}
                             onChange={(e) => {
                               const newLines = [...journalForm.lines];
-                              newLines[idx].debit = e.target.value;
-                              if (e.target.value) newLines[idx].credit = "";
+                              const targetLine = newLines[idx];
+                              if (!targetLine) return;
+                              targetLine.debit = e.target.value;
+                              if (e.target.value) targetLine.credit = "";
                               setJournalForm({ ...journalForm, lines: newLines });
                             }}
                           />
@@ -1225,8 +1320,10 @@ function AccountsPage() {
                             value={line.credit}
                             onChange={(e) => {
                               const newLines = [...journalForm.lines];
-                              newLines[idx].credit = e.target.value;
-                              if (e.target.value) newLines[idx].debit = "";
+                              const targetLine = newLines[idx];
+                              if (!targetLine) return;
+                              targetLine.credit = e.target.value;
+                              if (e.target.value) targetLine.debit = "";
                               setJournalForm({ ...journalForm, lines: newLines });
                             }}
                           />
@@ -1253,8 +1350,12 @@ function AccountsPage() {
                       <td colSpan={2} className="px-3 py-2 text-right">
                         Totals:
                       </td>
-                      <td className="px-3 py-2 text-right font-mono text-xs">{formatAmount(journalTotals.debit)}</td>
-                      <td className="px-3 py-2 text-right font-mono text-xs">{formatAmount(journalTotals.credit)}</td>
+                      <td className="px-3 py-2 text-right font-mono text-xs">
+                        {formatAmount(journalTotals.debit)}
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono text-xs">
+                        {formatAmount(journalTotals.credit)}
+                      </td>
                       <td></td>
                     </tr>
                   </tfoot>
@@ -1270,7 +1371,10 @@ function AccountsPage() {
                   onClick={() =>
                     setJournalForm({
                       ...journalForm,
-                      lines: [...journalForm.lines, { account_id: "", debit: "", credit: "", narration: "" }],
+                      lines: [
+                        ...journalForm.lines,
+                        { account_id: "", debit: "", credit: "", narration: "" },
+                      ],
                     })
                   }
                 >
@@ -1278,13 +1382,16 @@ function AccountsPage() {
                 </Button>
 
                 <div className="flex items-center gap-4">
-                  {Math.abs(journalTotals.debit - journalTotals.credit) <= 0.01 && journalTotals.debit > 0 ? (
+                  {Math.abs(journalTotals.debit - journalTotals.credit) <= 0.01 &&
+                  journalTotals.debit > 0 ? (
                     <span className="text-xs font-semibold text-emerald-600 bg-emerald-500/10 px-2.5 py-1 rounded">
                       ✓ Balanced (Total: {formatAmount(journalTotals.debit)})
                     </span>
                   ) : (
                     <span className="text-xs font-semibold text-destructive bg-destructive/10 px-2.5 py-1 rounded">
-                      Difference: {formatAmount(Math.abs(journalTotals.debit - journalTotals.credit))} (Unbalanced)
+                      Difference:{" "}
+                      {formatAmount(Math.abs(journalTotals.debit - journalTotals.credit))}{" "}
+                      (Unbalanced)
                     </span>
                   )}
                   <Button
@@ -1309,18 +1416,27 @@ function AccountsPage() {
               </div>
             ) : (
               journals.map((jv) => (
-                <div key={jv.id} className="rounded-lg border border-border bg-card overflow-hidden">
+                <div
+                  key={jv.id}
+                  className="rounded-lg border border-border bg-card overflow-hidden"
+                >
                   <div className="flex flex-wrap items-center justify-between bg-muted/40 px-4 py-2.5 border-b border-border">
                     <div className="flex items-center gap-3">
                       <span className="font-mono font-bold text-xs">{jv.voucher_no}</span>
                       <span className="text-xs text-muted-foreground">{jv.date}</span>
                       {jv.reference_no && (
-                        <span className="text-xs bg-muted px-2 py-0.5 rounded font-mono">Ref: {jv.reference_no}</span>
+                        <span className="text-xs bg-muted px-2 py-0.5 rounded font-mono">
+                          Ref: {jv.reference_no}
+                        </span>
                       )}
-                      {jv.remarks && <span className="text-xs text-muted-foreground truncate">{jv.remarks}</span>}
+                      {jv.remarks && (
+                        <span className="text-xs text-muted-foreground truncate">{jv.remarks}</span>
+                      )}
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className="font-semibold text-sm">Total: Rs {formatAmount(jv.total_amount)}</span>
+                      <span className="font-semibold text-sm">
+                        Total: Rs {formatAmount(jv.total_amount)}
+                      </span>
                       <Button
                         variant="ghost"
                         size="sm"
@@ -1347,7 +1463,9 @@ function AccountsPage() {
                           <td className="px-4 py-1.5 font-medium">
                             {line.account_code} - {line.account_name}
                           </td>
-                          <td className="px-4 py-1.5 text-muted-foreground">{line.narration || "—"}</td>
+                          <td className="px-4 py-1.5 text-muted-foreground">
+                            {line.narration || "—"}
+                          </td>
                           <td className="px-4 py-1.5 text-right font-mono w-28">
                             {line.debit > 0 ? formatAmount(line.debit) : "—"}
                           </td>
@@ -1454,7 +1572,9 @@ function AccountsPage() {
                       <td className="px-3 py-2">—</td>
                       <td className="px-3 py-2 font-mono text-xs">OPENING</td>
                       <td className="px-3 py-2">Opening Balance</td>
-                      <td className="px-3 py-2 text-muted-foreground">Initial balance brought forward</td>
+                      <td className="px-3 py-2 text-muted-foreground">
+                        Initial balance brought forward
+                      </td>
                       <td className="px-3 py-2 text-right font-mono">
                         {partyType === "customer" && ledger.opening_balance > 0
                           ? formatAmount(ledger.opening_balance)
@@ -1473,7 +1593,9 @@ function AccountsPage() {
                       <tr key={idx} className="hover:bg-muted/30">
                         <td className="px-3 py-2">{row.date}</td>
                         <td className="px-3 py-2 font-mono text-xs">{row.voucher_no || "—"}</td>
-                        <td className="px-3 py-2 capitalize text-xs">{row.voucher_type || row.ref_type}</td>
+                        <td className="px-3 py-2 capitalize text-xs">
+                          {row.voucher_type || row.ref_type}
+                        </td>
                         <td className="px-3 py-2 text-xs">{row.narration || "—"}</td>
                         <td className="px-3 py-2 text-right font-mono">
                           {row.debit > 0 ? formatAmount(row.debit) : "—"}
@@ -1514,7 +1636,9 @@ function AccountsPage() {
                         {acc.parent_id ? "↳ " : ""}
                         {acc.name}
                       </td>
-                      <td className="px-3 py-2 capitalize text-xs text-muted-foreground">{acc.type}</td>
+                      <td className="px-3 py-2 capitalize text-xs text-muted-foreground">
+                        {acc.type}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -1531,7 +1655,9 @@ function AccountsPage() {
             <div className="flex justify-between items-start border-b border-border pb-4">
               <div>
                 <h2 className="text-xl font-bold tracking-tight">PaintFlow ERP</h2>
-                <p className="text-xs uppercase tracking-wider text-muted-foreground">Industrial Factory Edition</p>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Industrial Factory Edition
+                </p>
               </div>
               <Button variant="ghost" size="sm" onClick={() => setPrintDoc(null)}>
                 <X className="h-5 w-5" />
@@ -1546,21 +1672,25 @@ function AccountsPage() {
 
               <div className="grid grid-cols-2 gap-4 text-xs">
                 <div>
-                  <span className="text-muted-foreground">Date:</span> <strong>{printDoc.date}</strong>
+                  <span className="text-muted-foreground">Date:</span>{" "}
+                  <strong>{printDoc.date}</strong>
                 </div>
                 {printDoc.partyName && (
                   <div>
-                    <span className="text-muted-foreground">Party:</span> <strong>{printDoc.partyName}</strong>
+                    <span className="text-muted-foreground">Party:</span>{" "}
+                    <strong>{printDoc.partyName}</strong>
                   </div>
                 )}
                 {printDoc.accountName && (
                   <div>
-                    <span className="text-muted-foreground">Account:</span> <strong>{printDoc.accountName}</strong>
+                    <span className="text-muted-foreground">Account:</span>{" "}
+                    <strong>{printDoc.accountName}</strong>
                   </div>
                 )}
                 {printDoc.reference && (
                   <div>
-                    <span className="text-muted-foreground">Reference:</span> <strong>{printDoc.reference}</strong>
+                    <span className="text-muted-foreground">Reference:</span>{" "}
+                    <strong>{printDoc.reference}</strong>
                   </div>
                 )}
                 <div className="col-span-2">
@@ -1590,8 +1720,12 @@ function AccountsPage() {
                         <tr key={i}>
                           <td className="p-2 font-medium">{l.account_name}</td>
                           <td className="p-2 text-muted-foreground">{l.narration || "—"}</td>
-                          <td className="p-2 text-right font-mono">{l.debit > 0 ? formatAmount(l.debit) : "—"}</td>
-                          <td className="p-2 text-right font-mono">{l.credit > 0 ? formatAmount(l.credit) : "—"}</td>
+                          <td className="p-2 text-right font-mono">
+                            {l.debit > 0 ? formatAmount(l.debit) : "—"}
+                          </td>
+                          <td className="p-2 text-right font-mono">
+                            {l.credit > 0 ? formatAmount(l.credit) : "—"}
+                          </td>
                         </tr>
                       ))}
                     </tbody>

@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Calculator, Plus, Trash2 } from "lucide-react";
 import { apiDelete, apiGet, apiPost, apiPut } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -54,7 +54,7 @@ function ItemsPage() {
   const [error, setError] = useState("");
   const [modalParticular, setModalParticular] = useState<Particular | null>(null);
 
-  async function loadItems() {
+  const loadItems = useCallback(async () => {
     const rows = await apiGet<Item[]>("/items");
     setItems(rows);
     if (!selectedItem && rows[0]) {
@@ -62,17 +62,17 @@ function ItemsPage() {
       const rowsForParticulars = await apiGet<Particular[]>(`/items/${rows[0].id}/particulars`);
       setParticulars(rowsForParticulars);
     }
-  }
+  }, [selectedItem]);
 
   async function loadParticulars(itemId: number) {
     const rows = await apiGet<Particular[]>(`/items/${itemId}/particulars`);
     setParticulars(rows);
   }
 
-  async function loadFactoryItems() {
+  const loadFactoryItems = useCallback(async () => {
     const rows = await apiGet<FactoryItem[]>("/factory-items");
     setFactoryItems(rows);
-  }
+  }, []);
 
   async function openFormula(particular: Particular) {
     setModalParticular(particular);
@@ -90,7 +90,7 @@ function ItemsPage() {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [loadItems, loadFactoryItems]);
 
   async function addItem() {
     const draft = await apiPost<Item>("/items", {
