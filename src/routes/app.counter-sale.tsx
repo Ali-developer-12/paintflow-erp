@@ -143,7 +143,6 @@ function CounterSalePage() {
     <div className="flex-1 space-y-5 p-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Counter Sale</h1>
-        <p className="text-sm text-muted-foreground">Phase 5 sales entry</p>
       </div>
 
       <div className="rounded-md border border-border bg-card p-5">

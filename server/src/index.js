@@ -166,6 +166,13 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
+app.get("/api/settings/company-name", requireAuth, (_req, res) => {
+  const row = db
+    .prepare("SELECT value FROM settings WHERE key = 'company_name' LIMIT 1")
+    .get();
+  res.json({ company_name: row?.value ?? "Paint Factory" });
+});
+
 // ---------- Auth ----------
 app.post("/api/auth/login", loginRateLimiter, (req, res) => {
   const { username, password } = req.body || {};

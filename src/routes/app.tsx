@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { LogOut, PanelLeftClose, PanelLeft, Droplets } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { MODULES, MODULE_GROUPS } from "@/lib/modules";
-import { API_URL } from "@/lib/api";
+import { API_URL, apiGet } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/app")({
@@ -14,10 +14,24 @@ function AppLayout() {
   const { user, ready, logout } = useAuth();
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
+  const [companyName, setCompanyName] = useState("Paint Factory");
 
   useEffect(() => {
     if (ready && !user) void navigate({ to: "/" });
   }, [ready, user, navigate]);
+
+  useEffect(() => {
+    if (!ready || !user) return;
+
+    void apiGet<{ company_name?: string }>("/settings/company-name")
+      .then((data) => {
+        const nextName = data?.company_name?.trim() || "Paint Factory";
+        setCompanyName(nextName);
+      })
+      .catch(() => {
+        setCompanyName("Paint Factory");
+      });
+  }, [ready, user]);
 
   if (!ready || !user) {
     return (
@@ -41,9 +55,9 @@ function AppLayout() {
           </div>
           {!collapsed && (
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold">Paint ERP</p>
+              <p className="truncate text-sm font-semibold">{companyName}</p>
               <p className="truncate text-[10px] uppercase tracking-wider opacity-60">
-                Factory Edition
+                Factory edition
               </p>
             </div>
           )}

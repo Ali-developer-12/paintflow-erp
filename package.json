@@ -1,5 +1,7 @@
 {
-  "name": "tanstack_start_ts",
+  "name": "paintflow-erp",
+  "version": "1.0.0",
+  "description": "PaintFlow ERP for managing paint factory operations, stock, accounts, and reporting.",
   "private": true,
   "sideEffects": false,
   "type": "module",

@@ -1,20 +1,19 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { apiGet } from "@/lib/api";
-import { MODULES } from "@/lib/modules";
 
 export const Route = createFileRoute("/app/")({
   head: () => ({
     meta: [
-      { title: "Dashboard — Paint Factory ERP" },
+      { title: "Dashboard — PaintFlow ERP" },
       {
         name: "description",
-        content: "Live counts across items, parties, purchases, sales and production.",
+        content: "Overview of your factory data across items, sales, stock and accounts.",
       },
-      { property: "og:title", content: "Dashboard — Paint Factory ERP" },
+      { property: "og:title", content: "Dashboard — PaintFlow ERP" },
       {
         property: "og:description",
-        content: "Live counts across items, parties, purchases, sales and production.",
+        content: "Overview of your factory data across items, sales, stock and accounts.",
       },
     ],
   }),
@@ -32,25 +31,18 @@ type Summary = {
   productions: number;
 };
 
-const PHASE_STATUS: Record<string, "Complete" | "Partial" | "Planned"> = {
-  "Phase 1": "Complete",
-  "Phase 2": "Partial",
-  "Phase 3": "Partial",
-  "Phase 4": "Complete",
-  "Phase 5": "Partial",
-  "Phase 6": "Partial",
-  "Phase 7": "Partial",
-};
-
-const CARDS: { key: keyof Summary; label: string }[] = [
+const PRIMARY_CARDS: { key: keyof Summary; label: string }[] = [
   { key: "items", label: "Items" },
-  { key: "particulars", label: "Item Particulars" },
-  { key: "factory_items", label: "Raw Materials" },
   { key: "customers", label: "Customers" },
   { key: "suppliers", label: "Suppliers" },
-  { key: "purchases", label: "Purchase Vouchers" },
-  { key: "productions", label: "Production Batches" },
-  { key: "sales", label: "Sale Vouchers" },
+  { key: "sales", label: "Sales" },
+];
+
+const BUSINESS_CARDS: { key: keyof Summary; label: string }[] = [
+  { key: "factory_items", label: "Raw materials" },
+  { key: "purchases", label: "Purchase vouchers" },
+  { key: "productions", label: "Production batches" },
+  { key: "particulars", label: "Particulars" },
 ];
 
 function Dashboard() {
@@ -60,13 +52,13 @@ function Dashboard() {
     retry: false,
   });
 
+  const hasData = Boolean(data && Object.values(data).some((value) => Number(value) > 0));
+
   return (
     <div className="flex-1 space-y-6 p-6">
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">
-          Phase 1 foundation: database schema, authentication and navigation are in place.
-        </p>
+        <p className="text-sm text-muted-foreground">Overview of your factory data.</p>
       </div>
 
       {error && (
@@ -76,61 +68,37 @@ function Dashboard() {
         </div>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {CARDS.map((c) => (
-          <div key={c.key} className="rounded-lg border border-border bg-card p-4 shadow-panel">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {PRIMARY_CARDS.map((card) => (
+          <div key={card.key} className="rounded-lg border border-border bg-card p-4 shadow-panel">
             <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-              {c.label}
+              {card.label}
             </p>
             <p className="num mt-2 text-2xl font-semibold tabular-nums">
-              {isLoading ? "…" : (data?.[c.key] ?? 0)}
+              {isLoading ? "…" : (data?.[card.key] ?? 0)}
             </p>
           </div>
         ))}
       </div>
 
-      <div className="rounded-lg border border-border bg-card shadow-panel">
-        <div className="border-b border-border px-4 py-3">
-          <h2 className="text-sm font-semibold">Module build status</h2>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="erp-grid">
-            <thead>
-              <tr>
-                <th>Module</th>
-                <th>Group</th>
-                <th>Phase</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {MODULES.map((m) => {
-                const status = PHASE_STATUS[m.phase] ?? "Planned";
-                return (
-                  <tr key={m.to}>
-                    <td className="font-medium">{m.label}</td>
-                    <td className="text-muted-foreground">{m.group}</td>
-                    <td className="text-muted-foreground">{m.phase}</td>
-                    <td>
-                      <span
-                        className={
-                          status === "Complete"
-                            ? "rounded-full bg-success/15 px-2 py-0.5 text-[11px] font-medium text-success"
-                            : status === "Partial"
-                              ? "rounded-full bg-warning/15 px-2 py-0.5 text-[11px] font-medium text-warning"
-                              : "rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
-                        }
-                      >
-                        {status}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {BUSINESS_CARDS.map((card) => (
+          <div key={card.key} className="rounded-lg border border-border bg-card p-4 shadow-panel">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+              {card.label}
+            </p>
+            <p className="num mt-2 text-2xl font-semibold tabular-nums">
+              {isLoading ? "…" : (data?.[card.key] ?? 0)}
+            </p>
+          </div>
+        ))}
       </div>
+
+      {!isLoading && !hasData && (
+        <div className="rounded-lg border border-dashed border-border bg-card p-6 text-sm text-muted-foreground">
+          No factory data yet. Add your first supplier, raw material, or sale to start tracking the production cycle.
+        </div>
+      )}
     </div>
   );
 }

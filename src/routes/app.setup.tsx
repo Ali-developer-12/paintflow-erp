@@ -1226,7 +1226,6 @@ function SetupPage() {
       <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Setup / Masters</h1>
-          <p className="text-sm text-muted-foreground">Phase 3 master data and accounting setup</p>
         </div>
       </div>
 

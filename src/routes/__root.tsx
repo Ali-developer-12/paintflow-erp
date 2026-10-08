@@ -11,7 +11,6 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { AuthProvider } from "../lib/auth";
-import { reportLovableError } from "../lib/lovable-error-reporting";
 
 function NotFoundComponent() {
   return (
@@ -39,7 +38,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
   useEffect(() => {
-    reportLovableError(error, { boundary: "tanstack_root_error_component" });
+    console.error(error);
   }, [error]);
 
   return (
@@ -78,14 +77,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "GSN Paints" },
-      { name: "description", content: "GSN Paints factory management system" },
-      { name: "author", content: "GSN Paints" },
-      { property: "og:title", content: "GSN Paints" },
-      { property: "og:description", content: "GSN Paints factory management system" },
+      { title: "PaintFlow ERP" },
+      { name: "description", content: "PaintFlow ERP factory management system" },
+      { name: "author", content: "PaintFlow ERP" },
+      { property: "og:title", content: "PaintFlow ERP" },
+      { property: "og:description", content: "PaintFlow ERP factory management system" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@GSNPaints" },
     ],
     links: [
       {
