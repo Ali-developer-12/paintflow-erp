@@ -425,6 +425,97 @@ test("B4: back-post skips zero-value documents instead of posting empty vouchers
   assert.equal(run.posted.length, 0);
   assert.equal(db.prepare("SELECT COUNT(*) AS c FROM account_vouchers").get().c, 0);
 });
+
+test("legacy back-posting is idempotent, balanced, auditable and reversible", () => {
+  reset();
+  const { supplierId, customerId } = seed();
+  const purchase = db
+    .prepare(
+      `INSERT INTO purchases (voucher_no,date,supplier_id,sub_total,net_total,paid_amount,created_at)
+       VALUES ('LEG-PUR-1','2025-01-01',?,100,100,0,datetime('now'))`,
+    )
+    .run(supplierId);
+  db.prepare(
+    "INSERT INTO purchase_lines (purchase_id,description,qty,rate,amount) VALUES (?,'Unclassified',1,100,100)",
+  ).run(purchase.lastInsertRowid);
+  const sale = db
+    .prepare(
+      `INSERT INTO sales (voucher_no,date,customer_id,sub_total,net_total,paid_amount,created_at)
+       VALUES ('LEG-SL-1','2025-01-02',?,60,60,0,datetime('now'))`,
+    )
+    .run(customerId);
+  db.prepare(
+    "INSERT INTO sale_lines (sale_id,description,qty,rate,cost_price,amount) VALUES (?,'Legacy sale',1,60,0,60)",
+  ).run(sale.lastInsertRowid);
+  const customerReturn = db
+    .prepare(
+      `INSERT INTO returns (voucher_no,date,return_type,customer_id,net_total,created_at)
+       VALUES ('LEG-RT-1','2025-01-03','customer',?,10,datetime('now'))`,
+    )
+    .run(customerId);
+  db.prepare(
+    "INSERT INTO return_lines (return_id,description,qty,rate,cost_price,amount) VALUES (?,'Legacy return',1,10,0,10)",
+  ).run(customerReturn.lastInsertRowid);
+
+  const before = backpost.backpostReport();
+  assert.equal(before.pending.length, 3);
+  assert.equal(before.already_posted, 0);
+  assert.ok(before.pending.find((row) => row.ref_type === "sale").notes.some((note) =>
+    /No historical cost snapshot/.test(note),
+  ));
+  assert.ok(before.pending.find((row) => row.ref_type === "purchase").notes.some((note) =>
+    /Inventory control account/.test(note),
+  ));
+  const dryRun = backpost.runBackpost({ dryRun: true });
+  assert.equal(dryRun.posted.length, 0);
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM account_vouchers").get().count, 0);
+
+  const result = backpost.runBackpost();
+  assert.equal(result.failed.length, 0, JSON.stringify(result.failed));
+  assert.equal(result.posted.length, 3);
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM migration_log WHERE migration = ? AND action = 'posted'").get(backpost.MIGRATION_NAME).count, 3);
+  assert.equal(accounting.trialBalance().balanced, true);
+
+  const rerun = backpost.runBackpost();
+  assert.equal(rerun.posted.length, 0);
+  assert.equal(rerun.report.already_posted, 3);
+  assert.equal(backpost.revertBackpost().reverted, 3);
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM account_vouchers").get().count, 0);
+  assert.equal(accounting.trialBalance().balanced, true);
+});
+
+test("back-posting refuses documents it cannot reconstruct honestly", () => {
+  reset();
+  const { supplierId } = seed();
+  const unreconciledPurchase = db
+    .prepare(
+      `INSERT INTO purchases (voucher_no,date,supplier_id,sub_total,net_total,paid_amount,created_at)
+       VALUES ('BAD-PUR-1','2025-01-01',?,500,900,0,datetime('now'))`,
+    )
+    .run(supplierId);
+  db.prepare(
+    "INSERT INTO purchase_lines (purchase_id,description,qty,rate,amount) VALUES (?,'Legacy',10,50,500)",
+  ).run(unreconciledPurchase.lastInsertRowid);
+  db.prepare(
+    `INSERT INTO purchases (voucher_no,date,supplier_id,sub_total,net_total,paid_amount,created_at)
+     VALUES ('BAD-PUR-2','2025-01-02',?,0,700,0,datetime('now'))`,
+  ).run(supplierId);
+  db.prepare(
+    `INSERT INTO sales (voucher_no,date,customer_id,sub_total,net_total,paid_amount,created_at)
+     VALUES ('BAD-SL-1','2025-02-01',NULL,300,300,0,datetime('now'))`,
+  ).run();
+
+  const report = backpost.backpostReport();
+  assert.equal(report.pending.length, 0);
+  assert.equal(report.skipped.length, 3);
+  assert.ok(report.skipped.some((row) => /does not reconcile/.test(row.reason)));
+  assert.ok(report.skipped.some((row) => /no line detail/.test(row.reason)));
+  assert.ok(report.skipped.some((row) => /no customer/.test(row.reason)));
+  const result = backpost.runBackpost();
+  assert.equal(result.posted.length, 0);
+  assert.equal(result.failed.length, 0);
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM account_vouchers").get().count, 0);
+});
 // ---- Scenario X: security and integrity ----------------------------------
 
 test("X1: session tokens are unforgeable, expiring and revocable", () => {

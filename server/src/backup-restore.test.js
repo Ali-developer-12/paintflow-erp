@@ -18,6 +18,34 @@ import { getFreePort } from "./test-utils.js";
 const serverDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
+test("bootstrap creates missing data, backup, and log directories recursively", async () => {
+  const baseDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "paintflow-config-"));
+  const dataDirectory = path.join(baseDirectory, "missing", "nested", "data");
+  const previous = {
+    DATA_DIR: process.env.DATA_DIR,
+    DB_PATH: process.env.DB_PATH,
+    BACKUP_DIR: process.env.BACKUP_DIR,
+    LOGS_DIR: process.env.LOGS_DIR,
+  };
+  try {
+    process.env.DATA_DIR = dataDirectory;
+    process.env.DB_PATH = path.join(dataDirectory, "paint-erp.db");
+    process.env.BACKUP_DIR = path.join(dataDirectory, "backups");
+    process.env.LOGS_DIR = path.join(dataDirectory, "logs");
+    const { ensureRuntimeDirs } = await import(`./config.js?test=${Date.now()}`);
+    const directories = ensureRuntimeDirs();
+    assert.equal(fs.existsSync(directories.dataDir), true);
+    assert.equal(fs.existsSync(directories.backupDir), true);
+    assert.equal(fs.existsSync(directories.logsDir), true);
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    fs.rmSync(baseDirectory, { recursive: true, force: true, maxRetries: 10 });
+  }
+});
+
 async function waitForHealth(baseUrl, child, previousInstanceId = null) {
   const deadline = Date.now() + 30_000;
   let lastError = "server did not respond";
