@@ -20,10 +20,17 @@ type Particular = {
   type: string;
   weight_unit: string;
   stock_qty: number;
+  cost_price: number;
   item_name?: string;
 };
 
-type ReturnLine = { particular_id: number; description: string; qty: number; rate: number };
+type ReturnLine = {
+  particular_id: number;
+  description: string;
+  qty: number;
+  rate: number;
+  cost_price: number;
+};
 
 export const Route = createFileRoute("/app/returns")({
   component: ReturnsPage,
@@ -56,6 +63,7 @@ function ReturnsPage() {
             description: particularsData[0].item_name ?? "",
             qty: 1,
             rate: 0,
+            cost_price: Number(particularsData[0].cost_price || 0),
           },
         ]);
       }
@@ -66,7 +74,13 @@ function ReturnsPage() {
     const base = particulars[0];
     setLines((cur) => [
       ...cur,
-      { particular_id: base ? base.id : 0, description: base?.item_name ?? "", qty: 1, rate: 0 },
+      {
+        particular_id: base ? base.id : 0,
+        description: base?.item_name ?? "",
+        qty: 1,
+        rate: 0,
+        cost_price: Number(base?.cost_price || 0),
+      },
     ]);
   }
 
@@ -84,11 +98,15 @@ function ReturnsPage() {
             ...line,
             particular_id: Number(value),
             description: selected?.item_name ?? line.description,
+            cost_price: selected ? Number(selected.cost_price || 0) : line.cost_price,
           };
         }
         return {
           ...line,
-          [field]: field === "qty" || field === "rate" ? Number(value || 0) : value,
+          [field]:
+            field === "qty" || field === "rate" || field === "cost_price"
+              ? Number(value || 0)
+              : value,
         } as ReturnLine;
       }),
     );
@@ -111,6 +129,7 @@ function ReturnsPage() {
         description: line.description,
         qty: line.qty,
         rate: line.rate,
+        cost_price: line.cost_price,
       })),
     });
 
@@ -123,6 +142,7 @@ function ReturnsPage() {
           description: particulars[0].item_name ?? "",
           qty: 1,
           rate: 0,
+          cost_price: Number(particulars[0].cost_price || 0),
         },
       ]);
     }
@@ -196,6 +216,7 @@ function ReturnsPage() {
                 <th className="p-2 text-left">Description</th>
                 <th className="p-2 text-left">Qty</th>
                 <th className="p-2 text-left">Rate</th>
+                <th className="p-2 text-left">Cost</th>
                 <th className="p-2 text-left">Amount</th>
                 <th className="p-2 text-left">Action</th>
               </tr>
@@ -239,6 +260,21 @@ function ReturnsPage() {
                       value={line.rate}
                       onChange={(e) => updateLine(index, "rate", Number(e.target.value))}
                     />
+                  </td>
+                  <td className="p-2">
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      aria-label={`Cost for line ${index + 1}`}
+                      value={line.cost_price}
+                      onChange={(e) => updateLine(index, "cost_price", e.target.value)}
+                    />
+                    {line.cost_price === 0 && (
+                      <p className="mt-1 text-xs text-amber-700">
+                        Cost is 0 — profit for this sale will be overstated
+                      </p>
+                    )}
                   </td>
                   <td className="p-2">
                     {(Number(line.qty || 0) * Number(line.rate || 0)).toLocaleString()}

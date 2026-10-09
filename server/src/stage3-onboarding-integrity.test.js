@@ -300,7 +300,7 @@ test("fresh-database purchase, production, sale, return, receipt and payment flo
   assert.equal(payment.status, 201, JSON.stringify(payment.json));
 });
 
-test("zero-cost sales and returns are blocked without stock or document changes", async () => {
+test("sale and return costs are editable per line, accept zero, and preserve accounting integrity", async () => {
   const date = new Date().toISOString().slice(0, 10);
   const item = await api("POST", "/items", { name: "Uncosted Paint" });
   const particular = await api("POST", `/items/${item.json.id}/particulars`, {
@@ -323,42 +323,136 @@ test("zero-cost sales and returns are blocked without stock or document changes"
   const sale = await api("POST", "/sales", {
     date,
     customer_id: customerId,
-    lines: [{ particular_id: particular.json.id, qty: 1, rate: 10 }],
+    lines: [{ particular_id: particular.json.id, qty: 1, rate: 10, cost_price: 7 }],
   });
-  assert.equal(sale.status, 400);
-  assert.match(sale.json.error, /Item has no cost price; set the cost first/);
+  assert.equal(sale.status, 201, JSON.stringify(sale.json));
+  let conn = readDb();
+  try {
+    assert.equal(
+      conn.prepare("SELECT cost_price FROM sale_lines WHERE sale_id = ?").get(sale.json.id)
+        .cost_price,
+      7,
+    );
+    const saleCost = conn
+      .prepare(
+        `SELECT SUM(al.debit) AS debit, SUM(al.credit) AS credit
+         FROM account_ledger al
+         JOIN account_vouchers av ON av.id = al.voucher_id
+         JOIN accounts a ON a.id = al.account_id
+         WHERE av.ref_type = 'sale' AND av.ref_id = ? AND a.code = '5300'`,
+      )
+      .get(sale.json.id);
+    assert.equal(saleCost.debit, 7);
+    assert.equal(saleCost.credit, 0);
+  } finally {
+    conn.close();
+  }
+
   const customerReturn = await api("POST", "/returns", {
     date,
     return_type: "customer",
     customer_id: customerId,
-    lines: [{ particular_id: particular.json.id, qty: 1, rate: 10 }],
+    lines: [{ particular_id: particular.json.id, qty: 1, rate: 10, cost_price: 4 }],
   });
-  assert.equal(customerReturn.status, 400);
-  assert.match(customerReturn.json.error, /Item has no cost price; set the cost first/);
-  assert.equal(
-    Number(
-      (await api("GET", "/particulars")).json.find((row) => row.id === particular.json.id)
-        .stock_qty,
-    ),
-    1,
-  );
-  const conn = readDb();
+  assert.equal(customerReturn.status, 201, JSON.stringify(customerReturn.json));
+  conn = readDb();
   try {
     assert.equal(
       conn
-        .prepare("SELECT COUNT(*) AS count FROM sale_lines WHERE particular_id = ?")
-        .get(particular.json.id).count,
+        .prepare("SELECT cost_price FROM return_lines WHERE return_id = ?")
+        .get(customerReturn.json.id).cost_price,
+      4,
+    );
+    const returnCost = conn
+      .prepare(
+        `SELECT SUM(al.debit) AS debit, SUM(al.credit) AS credit
+         FROM account_ledger al
+         JOIN account_vouchers av ON av.id = al.voucher_id
+         JOIN accounts a ON a.id = al.account_id
+         WHERE av.ref_type = 'return' AND av.ref_id = ? AND a.code = '5300'`,
+      )
+      .get(customerReturn.json.id);
+    assert.equal(returnCost.debit, 0);
+    assert.equal(returnCost.credit, 4);
+  } finally {
+    conn.close();
+  }
+
+  const zeroCostSale = await api("POST", "/sales", {
+    date,
+    customer_id: customerId,
+    lines: [{ particular_id: particular.json.id, qty: 1, rate: 10, cost_price: 0 }],
+  });
+  assert.equal(zeroCostSale.status, 201, JSON.stringify(zeroCostSale.json));
+  conn = readDb();
+  try {
+    assert.equal(
+      conn.prepare("SELECT cost_price FROM sale_lines WHERE sale_id = ?").get(zeroCostSale.json.id)
+        .cost_price,
       0,
     );
     assert.equal(
       conn
-        .prepare("SELECT COUNT(*) AS count FROM return_lines WHERE particular_id = ?")
-        .get(particular.json.id).count,
+        .prepare(
+          `SELECT COUNT(*) AS count FROM account_ledger al
+           JOIN account_vouchers av ON av.id = al.voucher_id
+           JOIN accounts a ON a.id = al.account_id
+           WHERE av.ref_type = 'sale' AND av.ref_id = ? AND a.code = '5300'`,
+        )
+        .get(zeroCostSale.json.id).count,
       0,
     );
   } finally {
     conn.close();
   }
+
+  for (const costPrice of [-1, "NaN"]) {
+    const invalid = await api("POST", "/sales", {
+      date,
+      customer_id: customerId,
+      lines: [{ particular_id: particular.json.id, qty: 1, rate: 10, cost_price: costPrice }],
+    });
+    assert.equal(invalid.status, 400);
+    assert.match(invalid.json.error, /cost price/i);
+  }
+
+  const insufficientStock = await api("POST", "/sales", {
+    date,
+    customer_id: customerId,
+    lines: [{ particular_id: particular.json.id, qty: 99, rate: 10, cost_price: 1 }],
+  });
+  assert.equal(insufficientStock.status, 400);
+  assert.match(insufficientStock.json.error, /Insufficient stock/);
+
+  assert.equal(
+    Number(
+      (await api("GET", "/particulars")).json.find((row) => row.id === particular.json.id)
+        .stock_qty,
+    ),
+    0,
+  );
+  conn = readDb();
+  try {
+    assert.equal(
+      conn
+        .prepare("SELECT COUNT(*) AS count FROM sale_lines WHERE particular_id = ?")
+        .get(particular.json.id).count,
+      2,
+    );
+    assert.equal(
+      conn
+        .prepare("SELECT COUNT(*) AS count FROM return_lines WHERE particular_id = ?")
+        .get(particular.json.id).count,
+      1,
+    );
+  } finally {
+    conn.close();
+  }
+  const reconciliation = await api("GET", "/stock/reconciliation");
+  const trialBalance = await api("GET", "/accounts/trial-balance");
+  assert.equal(reconciliation.json.ok, true, JSON.stringify(reconciliation.json));
+  assert.deepEqual(reconciliation.json.issues, []);
+  assert.equal(trialBalance.json.balanced, true, JSON.stringify(trialBalance.json));
 });
 
 test("stock operations reject negative balances atomically and concurrent last-unit sales serialize", async () => {

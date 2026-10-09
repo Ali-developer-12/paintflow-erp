@@ -168,7 +168,14 @@ test("first run, ERP workflow, role controls, and every sidebar module at 1366x7
   await page.getByLabel("Full name").fill("Stage Four Administrator");
   await page.getByLabel("Username").fill(admin.username);
   await page.getByLabel("Password").fill(admin.password);
+  const adminCreated = page.waitForResponse(
+    (response) =>
+      response.url() === `${apiUrl}/auth/setup` && response.request().method() === "POST",
+  );
   await page.getByRole("button", { name: "Create administrator" }).click();
+  const adminCreatedResponse = await adminCreated;
+  expect(adminCreatedResponse.status()).toBe(201);
+  await expect(page).toHaveURL(/\/app/);
   await expect(page.getByRole("link", { name: "Dashboard" })).toBeVisible();
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
@@ -189,7 +196,13 @@ test("first run, ERP workflow, role controls, and every sidebar module at 1366x7
   await expect(page.getByText(customerName, { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Suppliers", exact: true }).click();
   await page.locator("input").first().fill(suppliersName);
+  const supplierCreated = page.waitForResponse(
+    (response) =>
+      response.url() === `${apiUrl}/setup/suppliers` && response.request().method() === "POST",
+  );
   await page.getByRole("button", { name: "Save supplier" }).click();
+  const supplierCreatedResponse = await supplierCreated;
+  expect(supplierCreatedResponse.status()).toBe(201);
   await expect(page.getByText(suppliersName, { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Factory Items", exact: true }).click();
   await page.locator("input").first().fill(rawMaterialName);
@@ -301,9 +314,17 @@ test("first run, ERP workflow, role controls, and every sidebar module at 1366x7
   await page.getByRole("option", { name: customerName }).click();
   await page.getByRole("combobox").nth(1).click();
   await page.getByRole("option", { name: /Uncosted Test Paint/ }).click();
+  await expect(page.getByText("Cost is 0 — profit for this sale will be overstated")).toBeVisible();
+  await page.getByRole("spinbutton", { name: "Cost for line 1" }).fill("3.5");
+  const zeroCostSaleResponse = page.waitForResponse(
+    (response) =>
+      response.url() === `${apiUrl}/sales` &&
+      response.request().method() === "POST" &&
+      response.status() === 201,
+  );
   await page.getByRole("button", { name: "Save sale" }).click();
-  await expect(page.getByRole("alert")).toContainText("Item has no cost price; set the cost first");
-  await expect(page.getByRole("alert")).not.toContainText("{");
+  await zeroCostSaleResponse;
+  await expect(page.getByRole("heading", { name: "Counter Sale" })).toBeVisible();
 
   await page.getByRole("combobox").nth(1).click();
   await page.getByRole("option", { name: /New item/ }).click();

@@ -13,6 +13,8 @@
 
 The application recognizes the roles **admin**, **accountant**, and **user**. The server checks permissions even where the interface hides or disables an action.
 
+**Counter Sale** and customer **Return** lines include an editable cost snapshot, initially copied from the item's current cost. Operators may change the transaction cost, including to zero; this does not modify the item master. A zero cost is permitted and may overstate the transaction's reported profit.
+
 ## Data and configuration
 
 The default data directory is outside the source tree:

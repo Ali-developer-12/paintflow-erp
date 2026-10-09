@@ -64,6 +64,14 @@ function validateFactoryMaterial(factoryItemId, label = "Factory item") {
   return row;
 }
 
+function resolveLineCostPrice(line, fallback) {
+  const hasCostPrice = Object.hasOwn(line ?? {}, "cost_price");
+  if (hasCostPrice && line.cost_price === null) {
+    throw new Error("Cost price must be a valid number");
+  }
+  return finiteNumber(hasCostPrice ? line.cost_price : fallback, "Cost price", { min: 0 });
+}
+
 function validateFormulaPayload(particularId, payload) {
   const lines = Array.isArray(payload?.lines) ? payload.lines : [];
   if (!lines.length) {
@@ -1423,10 +1431,7 @@ app.post("/api/sales", requireAuth, (req, res) => {
           throw new Error(`Insufficient stock for ${particularId}`);
         }
 
-        const costPrice = Number(particular.cost_price);
-        if (!Number.isFinite(costPrice) || costPrice <= 0) {
-          throw new Error("Item has no cost price; set the cost first");
-        }
+        const costPrice = resolveLineCostPrice(line, particular.cost_price);
         const amount = round2(qty * rate);
         const cost = round2(qty * costPrice);
         total += amount;
@@ -1520,16 +1525,18 @@ app.post("/api/sales", requireAuth, (req, res) => {
         debit: 0,
         credit: netTotal,
       });
-      entries.push({
-        account_id: requireAccountIdByCode(ACCOUNT_CODES.costOfGoodsSold),
-        debit: round2(totalCost),
-        credit: 0,
-      });
-      entries.push({
-        account_id: requireAccountIdByCode(ACCOUNT_CODES.finishedInventory),
-        debit: 0,
-        credit: round2(totalCost),
-      });
+      if (totalCost > 0) {
+        entries.push({
+          account_id: requireAccountIdByCode(ACCOUNT_CODES.costOfGoodsSold),
+          debit: round2(totalCost),
+          credit: 0,
+        });
+        entries.push({
+          account_id: requireAccountIdByCode(ACCOUNT_CODES.finishedInventory),
+          debit: 0,
+          credit: round2(totalCost),
+        });
+      }
       postAccountVoucher({
         voucherNo: `AV-${voucherNo}`,
         date: String(date),
@@ -1730,10 +1737,7 @@ app.post("/api/returns", requireAuth, (req, res) => {
             .prepare("SELECT id, stock_qty, cost_price FROM item_particulars WHERE id = ?")
             .get(particularId);
           if (!particular) throw new Error("Customer return item variant not found");
-          const costPrice = Number(particular.cost_price);
-          if (!Number.isFinite(costPrice) || costPrice <= 0) {
-            throw new Error("Item has no cost price; set the cost first");
-          }
+          const costPrice = resolveLineCostPrice(line, particular.cost_price);
           returnedCost += qty * costPrice;
 
           db.prepare("UPDATE item_particulars SET stock_qty = stock_qty + ? WHERE id = ?").run(
@@ -1777,10 +1781,7 @@ app.post("/api/returns", requireAuth, (req, res) => {
           )
           .get(factoryItemId);
         if (!factoryItem) throw new Error("Supplier return raw material not found");
-        const costPrice = Number(factoryItem.rate);
-        if (!Number.isFinite(costPrice) || costPrice <= 0) {
-          throw new Error("Item has no cost price; set the cost first");
-        }
+        const costPrice = resolveLineCostPrice(line, factoryItem.rate);
         if (Number(factoryItem.stock_qty || 0) < qty) {
           throw new Error(
             `Insufficient raw stock for ${factoryItem.name}. Available ${Number(factoryItem.stock_qty || 0)}, requested ${qty}.`,
@@ -1837,16 +1838,18 @@ app.post("/api/returns", requireAuth, (req, res) => {
           debit: 0,
           credit: netTotal,
         });
-        entries.push({
-          account_id: requireAccountIdByCode(ACCOUNT_CODES.finishedInventory),
-          debit: round2(returnedCost),
-          credit: 0,
-        });
-        entries.push({
-          account_id: requireAccountIdByCode(ACCOUNT_CODES.costOfGoodsSold),
-          debit: 0,
-          credit: round2(returnedCost),
-        });
+        if (returnedCost > 0) {
+          entries.push({
+            account_id: requireAccountIdByCode(ACCOUNT_CODES.finishedInventory),
+            debit: round2(returnedCost),
+            credit: 0,
+          });
+          entries.push({
+            account_id: requireAccountIdByCode(ACCOUNT_CODES.costOfGoodsSold),
+            debit: 0,
+            credit: round2(returnedCost),
+          });
+        }
       } else {
         entries.push({
           account_id: resolvePartyAccountId("supplier", supplierId),

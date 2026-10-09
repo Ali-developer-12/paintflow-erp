@@ -18,9 +18,9 @@
 7. In **Accounts**, record customer receipts and supplier payments. The same area contains other accounting entries and reports.
 8. Check **Stock** and **Reports** to review balances and activity.
 
-### Zero-cost item rule
+### Sale and return cost
 
-A sale or return involving an item whose cost price is zero is blocked. Set a valid cost price in **Items Master** first. This prevents transactions from silently omitting cost of goods sold.
+Each **Counter Sale** and customer **Return** line has an editable **Cost** field, prefilled from the item's current cost. You may set it to any value including zero; the entered value is saved with that line and does not change the item's master cost. A zero cost displays a non-blocking warning because profit for that transaction may be overstated.
 
 ## Backup and restore
 
@@ -34,6 +34,6 @@ A sale or return involving an item whose cost price is zero is blocked. Set a va
 
 **Why can I not post a receipt or payment?** Those actions require the **admin** or **accountant** role.
 
-**Why was a sale blocked?** The item has no cost price. Update its cost in **Items Master** and try again.
+**Why is there an amber cost warning?** That line's cost is zero. You can proceed, or enter the cost you want to use for this transaction.
 
 **Where is my data stored?** By default, on Windows it is under `%LOCALAPPDATA%\PaintFlow ERP`. See [Administrator Notes](./ADMIN_NOTES.md) for platform paths and configuration.
