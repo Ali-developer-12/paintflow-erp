@@ -31,6 +31,7 @@ function LoginPage() {
   const [fullName, setFullName] = useState("");
   const [needsSetup, setNeedsSetup] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [restoreNotice, setRestoreNotice] = useState<{ ok: boolean; message: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -39,9 +40,20 @@ function LoginPage() {
 
   useEffect(() => {
     let active = true;
-    void apiGet<{ needsSetup: boolean }>("/auth/status")
-      .then(({ needsSetup: required }) => {
+    void apiGet<{
+      needsSetup: boolean;
+      lastRestore: { ok: boolean; error?: string } | null;
+    }>("/auth/status")
+      .then(({ needsSetup: required, lastRestore }) => {
         if (active) setNeedsSetup(required);
+        if (active && lastRestore) {
+          setRestoreNotice({
+            ok: lastRestore.ok,
+            message: lastRestore.ok
+              ? "Backup restored successfully."
+              : `Backup restore failed: ${lastRestore.error || "The previous data was kept."}`,
+          });
+        }
       })
       .catch((err: unknown) => {
         if (active) {
@@ -99,6 +111,19 @@ function LoginPage() {
               ? "Set up the first administrator account for this database."
               : "Enter your operator credentials to unlock the system."}
           </p>
+
+          {restoreNotice && (
+            <p
+              role={restoreNotice.ok ? "status" : "alert"}
+              className={`mt-4 rounded-md border px-3 py-2 text-sm ${
+                restoreNotice.ok
+                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-800"
+                  : "border-destructive/30 bg-destructive/10 text-destructive"
+              }`}
+            >
+              {restoreNotice.message}
+            </p>
+          )}
 
           <form onSubmit={onSubmit} className="mt-8 space-y-4">
             {needsSetup && (

@@ -2,8 +2,9 @@ import { round2 } from "./accounting-core.js";
 import { ensureChartOfAccounts, reconcileStock } from "./accounting.js";
 import { runBackpost } from "./backpost.js";
 import { logger } from "./logger.js";
+import { TARGET_SCHEMA_VERSION } from "./schema-version.js";
 
-export const TARGET_SCHEMA_VERSION = 7;
+export { TARGET_SCHEMA_VERSION };
 
 export function runMigrations(db) {
   const currentVersion = db.pragma("user_version", { simple: true }) || 0;

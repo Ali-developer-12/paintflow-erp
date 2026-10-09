@@ -2,14 +2,14 @@
 
 ## Roles and permissions
 
-| Area | Roles allowed |
-|---|---|
-| Receipts, payments, expenses, income, journals, and stock adjustments | admin, accountant |
-| Create or edit items, particulars, and formulas | admin, accountant |
-| Delete items or particulars | admin |
-| Create purchases, productions, sales, issue vouchers, and returns | admin, accountant, user |
-| Reads and reports | admin, accountant, user |
-| User administration, Setup / Masters, year posting, backup, restore, backup verification, and back-posting | admin |
+| Area                                                                                  | Roles allowed           |
+| ------------------------------------------------------------------------------------- | ----------------------- |
+| Receipts, payments, expenses, income, journals, and stock adjustments                 | admin, accountant       |
+| Create or edit items, particulars, and formulas                                       | admin, accountant       |
+| Delete items or particulars                                                           | admin                   |
+| Create purchases, productions, sales, issue vouchers, and returns                     | admin, accountant, user |
+| Reads and reports                                                                     | admin, accountant, user |
+| User administration, Setup / Masters, year posting, backup, restore, and back-posting | admin                   |
 
 The application recognizes the roles **admin**, **accountant**, and **user**. The server checks permissions even where the interface hides or disables an action.
 
@@ -26,11 +26,11 @@ The directory contains the SQLite database, backups, and logs. `DATA_DIR` overri
 
 The HTTP server defaults to `127.0.0.1:3001`, so it is intended for local use on the workstation. Configure `HOST` and `PORT` only when the deployment requires a different binding; exposing the service beyond loopback requires a deliberate network-security review.
 
-For a production run from a source checkout, install the root and `server` dependencies, run `npm run build`, then start `node server/src/index.js`. Open the configured local address in the browser. The first administrator is created through the **Create administrator account** screen; no shipped/default password is required.
+For a production run from a source checkout, install the root and `server` dependencies, run `npm run build`, then run `npm start` from the `server` directory. The supervisor starts Express and restarts it after a confirmed database restore. Open the configured local address in the browser. The first administrator is created through the **Create administrator account** screen; no shipped/default password is required.
 
 ## Backups
 
-Use the **Backup** module to create and verify backups. Backups are stored in the `backups` subdirectory of the data directory by default. Keep a second copy outside the workstation and periodically confirm that a backup can be selected for restore. Restore replaces database contents; verify the selected file and confirm that other users are out of the application before proceeding.
+Use the admin-only **Backup** module to create and restore backups. **Create Backup** saves a new file in a chosen folder or replaces an existing, validated GSN Paints backup after explicit confirmation. **Restore Backup** displays the file summary before requiring the exact word `RESTORE`; the server keeps a safety copy under `DATA_DIR\pre-restore` and retains the five most recent copies. A restore replaces the live database, restarts the server, invalidates every session, and requires sign-in with the users and passwords in the restored backup. Keep additional copies outside the workstation. Browsers without File System Access support offer download and upload fallback actions; they do not offer replacement.
 
 ## If the application will not start
 

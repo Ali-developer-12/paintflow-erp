@@ -131,6 +131,10 @@ test("first run, ERP workflow, role controls, and every sidebar module at 1366x7
   page.on("requestfailed", (request) =>
     pageErrors.push(`${request.url()}: ${request.failure()?.errorText}`),
   );
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "showDirectoryPicker", { value: undefined, configurable: true });
+    Object.defineProperty(window, "showOpenFilePicker", { value: undefined, configurable: true });
+  });
   const screenshots = useBuiltApp
     ? path.join(dataDir, "screens")
     : path.join(root, "docs", "reports", "screens");
@@ -139,7 +143,10 @@ test("first run, ERP workflow, role controls, and every sidebar module at 1366x7
   const health = await (await request.get(`${apiUrl}/health`)).json();
   expect(health.db).toBe(path.join(dataDir, "paint-erp.db"));
   expect(health.schema_version).toBeGreaterThan(0);
-  expect(await (await request.get(`${apiUrl}/auth/status`)).json()).toEqual({ needsSetup: true });
+  expect(await (await request.get(`${apiUrl}/auth/status`)).json()).toMatchObject({
+    needsSetup: true,
+    lastRestore: null,
+  });
   if (useBuiltApp) {
     for (const route of ["/", "/app/items"]) {
       const response = await request.get(`${uiUrl}${route}`);
@@ -156,7 +163,7 @@ test("first run, ERP workflow, role controls, and every sidebar module at 1366x7
   await page.goto(uiUrl);
   const statusResponse = await browserSetupResponse;
   expect(statusResponse.ok()).toBeTruthy();
-  expect(await statusResponse.json()).toEqual({ needsSetup: true });
+  expect(await statusResponse.json()).toMatchObject({ needsSetup: true, lastRestore: null });
   await expect(page.getByRole("heading", { name: "Create administrator account" })).toBeVisible({
     timeout: 30_000,
   });
@@ -242,7 +249,11 @@ test("first run, ERP workflow, role controls, and every sidebar module at 1366x7
     ),
   ]);
   await page.getByRole("link", { name: "Purchase", exact: true }).click();
-  await purchaseDataLoaded;
+  const [supplierRows] = await purchaseDataLoaded;
+  expect(await supplierRows.json()).toEqual(
+    expect.arrayContaining([expect.objectContaining({ name: suppliersName })]),
+  );
+  await expect(page.locator("select").nth(0).locator("option")).toContainText(suppliersName);
   await page.locator("select").nth(0).selectOption({ label: suppliersName });
   await page
     .locator("select")
@@ -434,7 +445,7 @@ test("first run, ERP workflow, role controls, and every sidebar module at 1366x7
     ["Stock", "Stock Management & Ledger"],
     ["Accounts", "Financial Accounting & Vouchers"],
     ["Reports", "Business Intelligence & Reports"],
-    ["Backup", "Database Backup & Recovery"],
+    ["Backup", "Backup & Restore"],
   ];
   await page.getByRole("button", { name: "Sign out" }).click();
   await page.getByLabel("Username").fill(admin.username);
@@ -455,8 +466,12 @@ test("first run, ERP workflow, role controls, and every sidebar module at 1366x7
   }
 
   await page.getByRole("link", { name: "Backup" }).click();
-  await page.getByRole("button", { name: "Create Backup Now" }).click();
-  await expect(page.getByText(/Backup created|Backup saved|Backup completed/i)).toBeVisible();
+  await page.getByRole("button", { name: "Create Backup" }).click();
+  const backupDownloadPromise = page.waitForEvent("download");
+  await page.getByRole("dialog").getByRole("button", { name: "Download backup" }).click();
+  const backupDownload = await backupDownloadPromise;
+  expect(backupDownload.suggestedFilename()).toMatch(/^GSN-Paints-Backup_.*\.db$/);
+  await expect(page.getByRole("status")).toContainText("Backup download started.");
 
   const reconciliation = await request.get(`${apiUrl}/stock/reconciliation`, {
     headers: {

@@ -1,405 +1,637 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useState } from "react";
-import {
-  DatabaseBackup,
-  RefreshCcw,
-  CheckCircle2,
-  AlertTriangle,
-  RotateCcw,
-  ShieldCheck,
-  X,
-  FileCheck,
-} from "lucide-react";
-import { API_URL, apiPost, getToken } from "@/lib/api";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { AlertTriangle, DatabaseBackup, FolderOpen, RotateCcw, X } from "lucide-react";
+import { API_URL, getToken } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
+import { useAuth } from "@/lib/auth";
 
-type BackupRow = {
-  id: number;
-  file_name: string;
-  file_path: string;
-  size_bytes: number;
-  created_at: string;
-  created_by_username: string | null;
+type BackupSummary = {
+  company_name: string;
+  backup_date: string;
+  schema_version: number;
+  counts: {
+    users: number;
+    customers: number;
+    suppliers: number;
+    items: number;
+    vouchers: number;
+  };
 };
 
-type BackupList = { directory: string; backups: BackupRow[] };
+type FileWritable = {
+  write(data: BufferSource): Promise<void>;
+  close(): Promise<void>;
+  abort(): Promise<void>;
+};
 
-function formatBytes(value: number) {
-  const bytes = Number(value || 0);
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+type FileHandle = {
+  name: string;
+  getFile(): Promise<File>;
+  createWritable(): Promise<FileWritable>;
+};
+
+type DirectoryHandle = {
+  getFileHandle(name: string, options: { create: true }): Promise<FileHandle>;
+};
+
+type PickerWindow = Window & {
+  showDirectoryPicker?: () => Promise<DirectoryHandle>;
+  showOpenFilePicker?: (options?: { multiple?: boolean }) => Promise<FileHandle[]>;
+};
+
+const sqliteHeader = new TextEncoder().encode("SQLite format 3\0");
+
+async function readResponseError(response: Response) {
+  try {
+    const body = (await response.json()) as { error?: string };
+    return body.error || `Request failed (${response.status})`;
+  } catch {
+    return `Request failed (${response.status})`;
+  }
 }
 
-export const Route = createFileRoute("/app/backup")({
-  component: BackupPage,
-});
-
-async function exportDatabase() {
+function authHeaders(extra: Record<string, string> = {}) {
   const token = getToken();
-  const response = await fetch(`${API_URL}/backup/export`, {
-    headers: {
-      Authorization: token ? `Bearer ${token}` : "",
-    },
-  });
+  return {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...extra,
+  };
+}
 
-  if (!response.ok) {
-    throw new Error("Backup export failed");
+async function inspectFile(file: File, purpose?: "replace") {
+  const response = await fetch(`${API_URL}/backup/inspect`, {
+    method: "POST",
+    headers: authHeaders({
+      "Content-Type": "application/octet-stream",
+      ...(purpose ? { "X-Backup-Purpose": purpose } : {}),
+    }),
+    body: file,
+  });
+  if (!response.ok) throw new Error(await readResponseError(response));
+  return (await response.json()) as { summary: BackupSummary; ticket?: string };
+}
+
+async function confirmBackup(fileName: string, sizeBytes: number) {
+  const response = await fetch(`${API_URL}/backup/confirm`, {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ file_name: fileName, size_bytes: sizeBytes }),
+  });
+  if (!response.ok) throw new Error(await readResponseError(response));
+}
+
+function snapshotFileName(response: Response) {
+  const disposition = response.headers.get("Content-Disposition") || "";
+  const match = disposition.match(/filename="([^"]+)"/i);
+  return (
+    match?.[1] || `GSN-Paints-Backup_${new Date().toISOString().slice(0, 19).replace(/:/g, "-")}.db`
+  );
+}
+
+async function writeSnapshot(handle: FileHandle) {
+  const response = await fetch(`${API_URL}/backup/snapshot`, { headers: authHeaders() });
+  if (!response.ok) throw new Error(await readResponseError(response));
+  if (!response.body) throw new Error("Backup download did not include a file stream");
+
+  const expectedSize = Number(response.headers.get("Content-Length") || 0);
+  const writer = await handle.createWritable();
+  const reader = response.body.getReader();
+  let writtenSize = 0;
+  let header = new Uint8Array();
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (header.length < sqliteHeader.length) {
+        const needed = sqliteHeader.length - header.length;
+        const addition = value.slice(0, needed);
+        const combined = new Uint8Array(header.length + addition.length);
+        combined.set(header);
+        combined.set(addition, header.length);
+        header = combined;
+      }
+      writtenSize += value.byteLength;
+      await writer.write(value);
+    }
+    if (!expectedSize || writtenSize !== expectedSize) {
+      throw new Error("Backup size did not match the server response");
+    }
+    if (
+      header.length !== sqliteHeader.length ||
+      !sqliteHeader.every((byte, i) => header[i] === byte)
+    ) {
+      throw new Error("Backup file did not have a valid SQLite header");
+    }
+    await writer.close();
+  } catch (error) {
+    await writer.abort();
+    throw error;
   }
 
+  const writtenFile = await handle.getFile();
+  if (writtenFile.size !== expectedSize) {
+    throw new Error("Saved backup size did not match the server response");
+  }
+  const savedHeader = new Uint8Array(await writtenFile.slice(0, sqliteHeader.length).arrayBuffer());
+  if (!sqliteHeader.every((byte, i) => savedHeader[i] === byte)) {
+    throw new Error("Saved backup file did not have a valid SQLite header");
+  }
+  return { fileName: handle.name, sizeBytes: writtenFile.size };
+}
+
+async function downloadSnapshot() {
+  const response = await fetch(`${API_URL}/backup/snapshot`, { headers: authHeaders() });
+  if (!response.ok) throw new Error(await readResponseError(response));
+  const fileName = snapshotFileName(response);
+  const sizeBytes = Number(response.headers.get("Content-Length") || 0);
   const blob = await response.blob();
+  if (blob.size !== sizeBytes) throw new Error("Backup size did not match the server response");
+  const header = new Uint8Array(await blob.slice(0, sqliteHeader.length).arrayBuffer());
+  if (!sqliteHeader.every((byte, i) => byte === header[i])) {
+    throw new Error("Backup download did not have a valid SQLite header");
+  }
   const href = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = href;
-  link.download = `paint-erp-backup-${new Date().toISOString().slice(0, 10)}.db`;
+  link.download = fileName;
   link.click();
-  URL.revokeObjectURL(href);
+  window.setTimeout(() => URL.revokeObjectURL(href), 0);
+  await confirmBackup(fileName, blob.size);
 }
 
 function BackupPage() {
-  const [listing, setListing] = useState<BackupList | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [lastBackup, setLastBackup] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [replaceHandle, setReplaceHandle] = useState<FileHandle | null>(null);
+  const [replaceDetails, setReplaceDetails] = useState<File | null>(null);
+  const [restoreSummary, setRestoreSummary] = useState<BackupSummary | null>(null);
+  const [restoreTicket, setRestoreTicket] = useState("");
+  const [restoreFile, setRestoreFile] = useState<File | null>(null);
+  const [restoreText, setRestoreText] = useState("");
   const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [status, setStatus] = useState("");
-
-  // Restore Dialog State
-  const [selectedBackup, setSelectedBackup] = useState<BackupRow | null>(null);
-  const [verifyResult, setVerifyResult] = useState<{
-    valid?: boolean;
-    integrity?: string;
-    size?: number;
-    error?: string;
-  } | null>(null);
-  const [verifying, setVerifying] = useState(false);
-  const [restoreResult, setRestoreResult] = useState<{
-    ok: boolean;
-    mode: string;
-    restored_to: string;
-    source_backup: string;
-    tables: number;
-    note: string;
-  } | null>(null);
-  const [restoring, setRestoring] = useState(false);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const token = getToken();
-      const res = await fetch(`${API_URL}/backup/list`, {
-        headers: { Authorization: token ? `Bearer ${token}` : "" },
-      });
-      if (!res.ok) throw new Error("Unable to load the backup history");
-      setListing((await res.json()) as BackupList);
-      setError("");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to load the backup history");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const fallbackInput = useRef<HTMLInputElement>(null);
+  const pickerWindow = (typeof window === "undefined" ? {} : window) as PickerWindow;
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (user && user.role !== "admin") {
+      void navigate({ to: "/app" });
+      return;
+    }
+    if (!user) return;
+    let active = true;
+    void fetch(`${API_URL}/backup/status`, { headers: authHeaders() })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(await readResponseError(response));
+        return (await response.json()) as { last_backup_at: string | null };
+      })
+      .then(({ last_backup_at: date }) => {
+        if (active) setLastBackup(date);
+      })
+      .catch((cause: unknown) => {
+        if (active)
+          setError(cause instanceof Error ? cause.message : "Unable to load backup status");
+      });
+    return () => {
+      active = false;
+    };
+  }, [navigate, user]);
 
-  async function runBackup() {
-    setBusy(true);
+  function clearNotices() {
     setError("");
-    setStatus("");
+    setMessage("");
+  }
+
+  async function saveToFolder() {
+    if (!pickerWindow.showDirectoryPicker) {
+      setCreateOpen(false);
+      await downloadSnapshot();
+      setLastBackup(new Date().toISOString());
+      setMessage("Backup download started.");
+      return;
+    }
+    const directoryPromise = pickerWindow.showDirectoryPicker();
+    setCreateOpen(false);
+    setBusy(true);
+    clearNotices();
     try {
-      await exportDatabase();
-      setStatus("Verified WAL-safe backup created successfully and downloaded.");
-      toast.success("Backup created successfully");
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Backup export failed");
-      toast.error(err instanceof Error ? err.message : "Backup failed");
+      const directory = await directoryPromise;
+      const name = `GSN-Paints-Backup_${new Date().toISOString().replace("T", "_").slice(0, 19).replace(/:/g, "-")}.db`;
+      const handle = await directory.getFileHandle(name, { create: true });
+      const saved = await writeSnapshot(handle);
+      await confirmBackup(saved.fileName, saved.sizeBytes);
+      setMessage("Backup created successfully.");
+      setLastBackup(new Date().toISOString());
+      const response = await fetch(`${API_URL}/backup/status`, { headers: authHeaders() });
+      if (response.ok)
+        setLastBackup(
+          ((await response.json()) as { last_backup_at: string | null }).last_backup_at,
+        );
+    } catch (cause) {
+      if (!(cause instanceof DOMException && cause.name === "AbortError")) {
+        setError(cause instanceof Error ? cause.message : "Backup could not be created");
+      }
     } finally {
       setBusy(false);
     }
   }
 
-  async function verifyBackup(backup: BackupRow) {
-    setSelectedBackup(backup);
-    setVerifyResult(null);
-    setRestoreResult(null);
-    setVerifying(true);
+  async function chooseFileToReplace() {
+    if (!pickerWindow.showOpenFilePicker) return;
+    setCreateOpen(false);
+    clearNotices();
     try {
-      const res = await apiPost<{
-        valid: boolean;
-        result?: string;
-        size: number;
-        error?: string;
-      }>("/backup/verify", { backup_id: backup.id });
-
-      setVerifyResult({
-        valid: res.valid,
-        integrity: res.result || (res.valid ? "ok" : "failed"),
-        size: res.size,
-        error: res.error ?? "",
-      });
-      if (res.valid) {
-        toast.success("Backup verification passed: SQLite integrity is OK");
-      } else {
-        toast.error(`Verification issue: ${res.error || "Integrity failed"}`);
+      const [handle] = await pickerWindow.showOpenFilePicker({ multiple: false });
+      if (!handle) return;
+      const existing = await handle.getFile();
+      await inspectFile(existing, "replace");
+      setReplaceHandle(handle);
+      setReplaceDetails(existing);
+    } catch (cause) {
+      if (!(cause instanceof DOMException && cause.name === "AbortError")) {
+        const detail = cause instanceof Error ? cause.message : "Unable to validate this file";
+        setError(
+          detail.includes("GSN Paints backup")
+            ? "This file is not a GSN Paints backup — nothing was changed."
+            : detail,
+        );
       }
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Verification request failed");
-      setVerifyResult({ valid: false, error: err instanceof Error ? err.message : "Failed" });
-    } finally {
-      setVerifying(false);
     }
   }
 
-  async function performRestore() {
-    if (!selectedBackup) return;
-    setRestoring(true);
+  async function replaceExistingBackup() {
+    if (!replaceHandle) return;
+    setBusy(true);
+    clearNotices();
     try {
-      const res = await apiPost<{
-        ok: boolean;
-        mode: string;
-        restored_to: string;
-        source_backup: string;
-        tables: number;
-        note: string;
-      }>("/backup/restore", { backup_id: selectedBackup.id });
-
-      setRestoreResult(res);
-      toast.success("Verified restore copy created successfully");
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Restore failed");
+      const saved = await writeSnapshot(replaceHandle);
+      await confirmBackup(saved.fileName, saved.sizeBytes);
+      setReplaceHandle(null);
+      setReplaceDetails(null);
+      setMessage("Backup replaced successfully.");
+      setLastBackup(new Date().toISOString());
+      const response = await fetch(`${API_URL}/backup/status`, { headers: authHeaders() });
+      if (response.ok)
+        setLastBackup(
+          ((await response.json()) as { last_backup_at: string | null }).last_backup_at,
+        );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Backup could not be replaced");
     } finally {
-      setRestoring(false);
+      setBusy(false);
     }
   }
 
-  return (
-    <div className="flex-1 p-6 space-y-6">
-      <div className="rounded-lg border border-border bg-card p-6 space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-primary/10 p-2.5">
-              <DatabaseBackup className="h-6 w-6 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight">Database Backup & Recovery</h1>
-              <p className="text-sm text-muted-foreground">
-                Verified WAL-safe SQLite snapshots, backup verification & safe recovery
-              </p>
-            </div>
+  async function chooseRestoreFile() {
+    clearNotices();
+    if (!pickerWindow.showOpenFilePicker) {
+      fallbackInput.current?.click();
+      return;
+    }
+    try {
+      const [handle] = await pickerWindow.showOpenFilePicker({ multiple: false });
+      if (handle) await inspectRestoreFile(await handle.getFile());
+    } catch (cause) {
+      if (!(cause instanceof DOMException && cause.name === "AbortError")) {
+        setError(cause instanceof Error ? cause.message : "Unable to inspect backup");
+      }
+    }
+  }
+
+  async function inspectRestoreFile(file: File) {
+    setBusy(true);
+    clearNotices();
+    try {
+      const result = await inspectFile(file);
+      if (!result.ticket) throw new Error("The server did not issue a restore ticket");
+      setRestoreFile(file);
+      setRestoreSummary(result.summary);
+      setRestoreTicket(result.ticket);
+      setRestoreText("");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to inspect backup");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function applyRestore() {
+    if (!restoreTicket || restoreText !== "RESTORE") return;
+    setBusy(true);
+    clearNotices();
+    try {
+      const previousHealthResponse = await fetch(`${API_URL}/health`);
+      if (!previousHealthResponse.ok) throw new Error("The server is not ready to restore");
+      const previousHealth = (await previousHealthResponse.json()) as { instance_id: string };
+      const response = await fetch(`${API_URL}/backup/restore-apply`, {
+        method: "POST",
+        headers: authHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ ticket: restoreTicket, confirm: "RESTORE" }),
+      });
+      if (!response.ok) throw new Error(await readResponseError(response));
+      setRestoreSummary(null);
+      setRestoreTicket("");
+      setMessage("Restoring… the app is restarting");
+      const deadline = Date.now() + 90_000;
+      while (Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        try {
+          const healthResponse = await fetch(`${API_URL}/health`, { cache: "no-store" });
+          if (!healthResponse.ok) continue;
+          const currentHealth = (await healthResponse.json()) as { instance_id: string };
+          if (
+            currentHealth.instance_id &&
+            currentHealth.instance_id !== previousHealth.instance_id
+          ) {
+            window.location.assign("/");
+            return;
+          }
+        } catch {
+          continue;
+        }
+      }
+      throw new Error("The server did not finish restarting within 90 seconds");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Restore could not be applied");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function onFallbackFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (file) void inspectRestoreFile(file);
+  }
+
+  return user?.role !== "admin" ? (
+    <div role="alert" className="p-6 text-sm text-destructive">
+      Only administrators can access backup and restore.
+    </div>
+  ) : (
+    <div className="flex-1 space-y-6 p-6">
+      <div className="mx-auto max-w-3xl space-y-6 rounded-xl border border-border bg-card p-8">
+        <div className="space-y-2 text-center">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <DatabaseBackup className="h-7 w-7" />
           </div>
-          <div className="flex items-center gap-2">
-            <Button onClick={() => void runBackup()} disabled={busy}>
-              <DatabaseBackup className="h-4 w-4 mr-1.5" />{" "}
-              {busy ? "Backing up..." : "Create Backup Now"}
-            </Button>
-            <Button variant="outline" onClick={() => void load()} disabled={loading}>
-              <RefreshCcw className="h-4 w-4 mr-1.5" /> Refresh
-            </Button>
-          </div>
+          <h1 className="text-2xl font-bold tracking-tight">Backup &amp; Restore</h1>
+          <p className="text-sm text-muted-foreground">
+            Create a verified backup or restore this database from a backup file.
+          </p>
         </div>
 
-        {status && (
-          <div className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-800 flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
-            <span>{status}</span>
-          </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Button className="h-20 text-base" disabled={busy} onClick={() => setCreateOpen(true)}>
+            <DatabaseBackup className="mr-2 h-5 w-5" />
+            Create Backup
+          </Button>
+          <Button
+            className="h-20 text-base"
+            variant="outline"
+            disabled={busy}
+            onClick={() => void chooseRestoreFile()}
+          >
+            <RotateCcw className="mr-2 h-5 w-5" />
+            Restore Backup
+          </Button>
+        </div>
+
+        <p className="text-center text-sm text-muted-foreground" data-testid="last-backup">
+          Last backup: {lastBackup ? new Date(lastBackup).toLocaleString() : "never"}
+        </p>
+        {!pickerWindow.showDirectoryPicker && (
+          <p className="text-center text-xs text-muted-foreground">
+            File System Access is unavailable in this browser. Backups download normally; restore
+            uses a file picker.
+          </p>
+        )}
+        {message && (
+          <p role="status" className="rounded-md bg-emerald-500/10 p-3 text-sm text-emerald-800">
+            {message}
+          </p>
         )}
         {error && (
-          <div className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 shrink-0" />
+          <p
+            role="alert"
+            className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+          >
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>{error}</span>
-          </div>
+          </p>
         )}
-
-        <div className="rounded-md border border-border bg-muted/20 p-4 text-xs text-muted-foreground space-y-1">
-          <p className="font-semibold text-foreground">Operational Safety Guarantee:</p>
-          <p>
-            • Backups utilize SQLite&rsquo;s native online backup API (`db.backup()`) to create
-            consistent, WAL-safe snapshots.
-          </p>
-          <p>
-            • Backups are automatically verified with PRAGMA integrity_check before being logged to
-            disk.
-          </p>
-          <p>
-            • HTTP Restore runs in safe copy-verification mode so your current live database is
-            never silently overwritten without an operator safety backup.
-          </p>
-        </div>
-
-        <div className="space-y-3">
-          <div className="flex justify-between items-center">
-            <h2 className="text-base font-semibold">Backup History & Recovery Points</h2>
-            {listing?.directory && (
-              <span className="text-xs text-muted-foreground font-mono">
-                Location: {listing.directory}
-              </span>
-            )}
-          </div>
-
-          <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 text-left border-b border-border">
-                <tr>
-                  <th className="px-3 py-2.5">Snapshot File</th>
-                  <th className="px-3 py-2.5">Size</th>
-                  <th className="px-3 py-2.5">Created At</th>
-                  <th className="px-3 py-2.5">Operator</th>
-                  <th className="px-3 py-2.5 text-center">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {loading ? (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
-                      Loading backup archive...
-                    </td>
-                  </tr>
-                ) : !listing || listing.backups.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
-                      No backups have been recorded yet. Click &ldquo;Create Backup Now&rdquo; to
-                      take your first snapshot.
-                    </td>
-                  </tr>
-                ) : (
-                  listing.backups.map((row) => (
-                    <tr key={row.id} className="hover:bg-muted/30">
-                      <td className="px-3 py-2.5 font-mono text-xs font-medium">{row.file_name}</td>
-                      <td className="px-3 py-2.5 tabular-nums text-xs">
-                        {formatBytes(row.size_bytes)}
-                      </td>
-                      <td className="px-3 py-2.5 text-xs">{row.created_at}</td>
-                      <td className="px-3 py-2.5 text-xs text-muted-foreground">
-                        {row.created_by_username ?? "System"}
-                      </td>
-                      <td className="px-3 py-2.5 text-center">
-                        <div className="inline-flex gap-1.5">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 text-xs px-2.5"
-                            onClick={() => void verifyBackup(row)}
-                          >
-                            <ShieldCheck className="h-3.5 w-3.5 mr-1 text-primary" /> Verify &
-                            Restore
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
       </div>
 
-      {/* ---------------- RESTORE & VERIFY MODAL ---------------- */}
-      {selectedBackup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
-          <div className="bg-card w-full max-w-xl rounded-xl border border-border shadow-2xl p-6 space-y-5">
-            <div className="flex justify-between items-start border-b border-border pb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="rounded-md bg-primary/10 p-2 text-primary">
-                  <RotateCcw className="h-5 w-5" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-base">Database Recovery Verification</h3>
-                  <p className="text-xs text-muted-foreground">
-                    Snapshot: {selectedBackup.file_name}
-                  </p>
-                </div>
-              </div>
-              <Button variant="ghost" size="sm" onClick={() => setSelectedBackup(null)}>
+      <input
+        ref={fallbackInput}
+        type="file"
+        accept=".db,.sqlite,.sqlite3"
+        className="hidden"
+        onChange={onFallbackFileChange}
+      />
+
+      {createOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-title"
+            className="w-full max-w-md space-y-5 rounded-xl border border-border bg-card p-6 shadow-xl"
+          >
+            <div className="flex items-start justify-between">
+              <h2 id="create-title" className="text-lg font-semibold">
+                Create Backup
+              </h2>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Close"
+                onClick={() => setCreateOpen(false)}
+              >
                 <X className="h-4 w-4" />
               </Button>
             </div>
-
-            <div className="space-y-3 text-xs">
-              <div className="rounded-md bg-muted/40 p-3 space-y-1">
-                <p>
-                  <strong>File Size:</strong> {formatBytes(selectedBackup.size_bytes)}
-                </p>
-                <p>
-                  <strong>Created:</strong> {selectedBackup.created_at}
-                </p>
-                <p className="truncate">
-                  <strong>Path:</strong> {selectedBackup.file_path}
-                </p>
+            {pickerWindow.showDirectoryPicker ? (
+              <div className="grid gap-3">
+                <Button onClick={() => void saveToFolder()}>
+                  <FolderOpen className="mr-2 h-4 w-4" />
+                  Choose a folder
+                </Button>
+                {pickerWindow.showOpenFilePicker && (
+                  <Button variant="outline" onClick={() => void chooseFileToReplace()}>
+                    Choose an existing backup file
+                  </Button>
+                )}
               </div>
-
-              {verifying ? (
-                <div className="py-4 text-center text-muted-foreground">
-                  <RefreshCcw className="h-5 w-5 animate-spin mx-auto mb-2 text-primary" />
-                  Verifying SQLite file integrity and table structures...
-                </div>
-              ) : verifyResult ? (
-                <div
-                  className={`rounded-md p-3 border ${
-                    verifyResult.valid
-                      ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-800"
-                      : "border-destructive/40 bg-destructive/10 text-destructive"
-                  }`}
-                >
-                  <p className="font-semibold flex items-center gap-1.5">
-                    {verifyResult.valid ? (
-                      <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                    ) : (
-                      <AlertTriangle className="h-4 w-4" />
-                    )}
-                    Integrity Status: {verifyResult.valid ? "PASSED (Integrity OK)" : "FAILED"}
-                  </p>
-                  {verifyResult.error && <p className="mt-1">{verifyResult.error}</p>}
-                </div>
-              ) : null}
-
-              {restoreResult && (
-                <div className="rounded-md border border-emerald-500/40 bg-emerald-500/10 p-3 text-emerald-800 space-y-1">
-                  <p className="font-bold flex items-center gap-1.5">
-                    <FileCheck className="h-4 w-4 text-emerald-600" />
-                    Safe Restore Copy Verified!
-                  </p>
-                  <p>
-                    <strong>Restored To:</strong> {restoreResult.restored_to}
-                  </p>
-                  <p>
-                    <strong>Tables Restored:</strong> {restoreResult.tables} business tables
-                  </p>
-                  <p className="text-[11px] text-emerald-700">{restoreResult.note}</p>
-                </div>
-              )}
-            </div>
-
-            <div className="flex justify-between items-center pt-2 border-t border-border">
-              <Button variant="outline" size="sm" onClick={() => setSelectedBackup(null)}>
-                Close
+            ) : (
+              <Button onClick={() => void saveToFolder()}>
+                <DatabaseBackup className="mr-2 h-4 w-4" />
+                Download backup
               </Button>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void verifyBackup(selectedBackup)}
-                  disabled={verifying}
-                >
-                  <ShieldCheck className="h-3.5 w-3.5 mr-1" /> Re-Verify
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={() => void performRestore()}
-                  disabled={verifying || restoring || !verifyResult?.valid}
-                >
-                  <RotateCcw className="h-3.5 w-3.5 mr-1" />
-                  {restoring ? "Restoring..." : "Verify & Restore Snapshot"}
-                </Button>
-              </div>
+            )}
+          </section>
+        </div>
+      )}
+
+      {replaceHandle && replaceDetails && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="replace-title"
+            className="w-full max-w-lg space-y-5 rounded-xl border border-border bg-card p-6 shadow-xl"
+          >
+            <div className="flex items-start justify-between">
+              <h2 id="replace-title" className="text-lg font-semibold">
+                Replace backup file?
+              </h2>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Close"
+                onClick={() => {
+                  setReplaceHandle(null);
+                  setReplaceDetails(null);
+                }}
+              >
+                <X className="h-4 w-4" />
+              </Button>
             </div>
-          </div>
+            <div className="space-y-2 text-sm">
+              <p>
+                <strong>Name:</strong> {replaceDetails.name}
+              </p>
+              <p>
+                <strong>Size:</strong> {replaceDetails.size.toLocaleString()} bytes
+              </p>
+              <p>
+                <strong>Last modified:</strong>{" "}
+                {new Date(replaceDetails.lastModified).toLocaleString()}
+              </p>
+              <p className="rounded-md border border-destructive/40 bg-destructive/10 p-3 font-medium text-destructive">
+                This file will be replaced. Its old content will be lost.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setReplaceHandle(null);
+                  setReplaceDetails(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                disabled={busy}
+                onClick={() => void replaceExistingBackup()}
+              >
+                Replace file
+              </Button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {restoreSummary && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="restore-title"
+            className="my-auto w-full max-w-xl space-y-5 rounded-xl border border-border bg-card p-6 shadow-xl"
+          >
+            <div className="flex items-start justify-between">
+              <h2 id="restore-title" className="text-lg font-semibold">
+                Restore Backup
+              </h2>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Close"
+                onClick={() => {
+                  setRestoreSummary(null);
+                  setRestoreTicket("");
+                }}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <p>
+                <strong>Company:</strong> {restoreSummary.company_name}
+              </p>
+              <p>
+                <strong>Backup date:</strong>{" "}
+                {new Date(restoreSummary.backup_date).toLocaleString()}
+              </p>
+              <p>
+                <strong>Users:</strong> {restoreSummary.counts.users}
+              </p>
+              <p>
+                <strong>Customers:</strong> {restoreSummary.counts.customers}
+              </p>
+              <p>
+                <strong>Suppliers:</strong> {restoreSummary.counts.suppliers}
+              </p>
+              <p>
+                <strong>Items:</strong> {restoreSummary.counts.items}
+              </p>
+              <p>
+                <strong>Vouchers:</strong> {restoreSummary.counts.vouchers}
+              </p>
+              <p>
+                <strong>Schema version:</strong> {restoreSummary.schema_version}
+              </p>
+            </div>
+            <p className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm font-medium text-destructive">
+              Current data will be replaced by this backup. A safety copy of the current data is
+              kept. You will be logged out and must log in with the usernames/passwords stored in
+              the backup.
+            </p>
+            <label className="block space-y-1 text-sm font-medium" htmlFor="restore-confirm">
+              Type RESTORE to continue
+              <input
+                id="restore-confirm"
+                value={restoreText}
+                onChange={(event) => setRestoreText(event.target.value)}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 font-mono"
+                autoComplete="off"
+              />
+            </label>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                disabled={busy}
+                onClick={() => {
+                  setRestoreSummary(null);
+                  setRestoreTicket("");
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                disabled={busy || restoreText !== "RESTORE"}
+                onClick={() => void applyRestore()}
+              >
+                {busy ? "Restoring…" : "Restore Backup"}
+              </Button>
+            </div>
+            {restoreFile && (
+              <p className="truncate text-xs text-muted-foreground">Selected: {restoreFile.name}</p>
+            )}
+          </section>
         </div>
       )}
     </div>
   );
 }
+
+export const Route = createFileRoute("/app/backup")({
+  component: BackupPage,
+});

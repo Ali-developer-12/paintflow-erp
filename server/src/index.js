@@ -1,7 +1,10 @@
 import express from "express";
 import cors from "cors";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { Transform } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import { fileURLToPath } from "node:url";
 import db, { applySchema, DB_PATH, closeDatabase } from "./db.js";
 import {
@@ -31,17 +34,23 @@ import {
   ensureCurrentFinancialYear,
   listYears,
 } from "./years.js";
-import { BACKUP_DIR, createBackup, listBackups, verifyDatabaseFile } from "./backup.js";
+import { BACKUP_DIR, createBackup, listBackups } from "./backup.js";
 import { DOC_PREFIX, nextUniqueVoucherNo } from "./vouchers.js";
 import { backpostReport, runBackpost, revertBackpost } from "./backpost.js";
-import { resolveBackup, restoreToNewFile } from "./restore.js";
-import { HOST, PORT, ALLOWED_ORIGINS, APP_NAME, APP_VERSION } from "./config.js";
+import { HOST, PORT, ALLOWED_ORIGINS, APP_NAME, APP_VERSION, DATA_DIR } from "./config.js";
 import { logger } from "./logger.js";
 import { recordAuditLog } from "./audit.js";
 import { sendRouteError } from "./http-errors.js";
 import { runMigrations, TARGET_SCHEMA_VERSION } from "./migrations.js";
 import erpRoutes from "./erp-routes.js";
 import { finiteNumber, validateNumericPayload } from "./validation.js";
+import {
+  consumeRestoreTicket,
+  issueRestoreTicket,
+  looksLikeGsnBackup,
+  MAX_BACKUP_BYTES,
+} from "./backup-restore.js";
+import { consumeRestoreResult } from "./pre-start.js";
 
 applySchema();
 ensureChartOfAccounts();
@@ -116,6 +125,7 @@ function validateFormulaPayload(particularId, payload) {
 const app = express();
 const APP_DIR = path.dirname(fileURLToPath(import.meta.url));
 const WEB_DIR = path.resolve(APP_DIR, "../../dist");
+const instanceId = crypto.randomUUID();
 
 app.use(
   cors({
@@ -178,6 +188,7 @@ app.get("/api/health", (_req, res) => {
     app: APP_NAME,
     version: APP_VERSION,
     schema_version: TARGET_SCHEMA_VERSION,
+    instance_id: instanceId,
     db: DB_PATH,
     time: new Date().toISOString(),
   });
@@ -191,7 +202,7 @@ app.get("/api/settings/company-name", requireAuth, (_req, res) => {
 // ---------- Auth ----------
 app.get("/api/auth/status", (_req, res) => {
   const userCount = db.prepare("SELECT COUNT(*) AS count FROM users").get().count;
-  res.json({ needsSetup: userCount === 0 });
+  res.json({ needsSetup: userCount === 0, lastRestore: consumeRestoreResult() });
 });
 
 app.post("/api/auth/setup", loginRateLimiter, (req, res) => {
@@ -2009,6 +2020,211 @@ app.get("/api/backup/list", requireAuth, requireRole("admin"), (_req, res) => {
   res.json({ directory: BACKUP_DIR, backups: listBackups() });
 });
 
+function makeClientBackupName() {
+  const stamp = new Date().toISOString().replace("T", "_").slice(0, 19).replace(/:/g, "-");
+  return `GSN-Paints-Backup_${stamp}.db`;
+}
+
+function backupErrorMessage(error) {
+  return error instanceof Error ? error.message : "Backup request failed";
+}
+
+app.get("/api/backup/status", requireAuth, requireRole("admin"), (_req, res) => {
+  const row = db.prepare("SELECT value FROM settings WHERE key = 'last_backup_at'").get();
+  res.json({ last_backup_at: row?.value ?? null });
+});
+
+app.get("/api/backup/snapshot", requireAuth, requireRole("admin"), async (_req, res) => {
+  const temporaryDirectory = path.join(DATA_DIR, "tmp");
+  const temporaryPath = path.join(
+    temporaryDirectory,
+    `snapshot-${process.pid}-${crypto.randomBytes(8).toString("hex")}.db`,
+  );
+  let removed = false;
+  const removeTemporary = () => {
+    if (removed) return;
+    removed = true;
+    for (const suffix of ["", "-wal", "-shm"]) {
+      fs.rm(`${temporaryPath}${suffix}`, { force: true }, (error) => {
+        if (error)
+          logger.error("Unable to remove temporary backup snapshot", { error: error.message });
+      });
+    }
+  };
+
+  try {
+    fs.mkdirSync(temporaryDirectory, { recursive: true });
+    await db.backup(temporaryPath);
+    looksLikeGsnBackup(temporaryPath);
+    const size = fs.statSync(temporaryPath).size;
+    if (!size || size > MAX_BACKUP_BYTES) {
+      throw new Error("The generated backup has an invalid size");
+    }
+    res.setHeader("Content-Type", "application/vnd.sqlite3");
+    res.setHeader("Content-Length", String(size));
+    res.setHeader("Content-Disposition", `attachment; filename="${makeClientBackupName()}"`);
+    res.once("finish", removeTemporary);
+    res.once("close", removeTemporary);
+    const stream = fs.createReadStream(temporaryPath);
+    stream.once("error", (error) => {
+      logger.error("Unable to stream backup snapshot", { error: error.message });
+      if (!res.headersSent) sendRouteError(res, error, 500, "Backup download failed");
+      else res.destroy(error);
+    });
+    stream.pipe(res);
+  } catch (error) {
+    removeTemporary();
+    sendRouteError(res, error, 500, "Backup snapshot failed");
+  }
+});
+
+app.post("/api/backup/inspect", requireAuth, requireRole("admin"), async (req, res) => {
+  const stagingDirectory = path.join(DATA_DIR, "restore-staging");
+  const replaceInspection = req.headers["x-backup-purpose"] === "replace";
+  const temporaryDirectory = replaceInspection ? path.join(DATA_DIR, "tmp") : stagingDirectory;
+  const temporaryPath = path.join(
+    temporaryDirectory,
+    `inspect-${process.pid}-${crypto.randomBytes(8).toString("hex")}.db`,
+  );
+  const stagedPath = path.join(stagingDirectory, "staged.db");
+  const declaredLength = Number(req.headers["content-length"] || 0);
+  if (declaredLength > MAX_BACKUP_BYTES) {
+    req.resume();
+    return res.status(413).json({ error: "Backup file exceeds the 2 GB limit" });
+  }
+
+  let uploadedBytes = 0;
+  try {
+    fs.mkdirSync(temporaryDirectory, { recursive: true });
+    const limitStream = new Transform({
+      transform(chunk, _encoding, callback) {
+        uploadedBytes += chunk.length;
+        if (uploadedBytes > MAX_BACKUP_BYTES) {
+          callback(new Error("Backup file exceeds the 2 GB limit"));
+          return;
+        }
+        callback(null, chunk);
+      },
+    });
+    await pipeline(req, limitStream, fs.createWriteStream(temporaryPath, { flags: "wx" }));
+    if (uploadedBytes === 0) throw new Error("Backup file is empty");
+    const summary = looksLikeGsnBackup(temporaryPath);
+    if (replaceInspection) {
+      return res.json({ summary });
+    }
+
+    fs.mkdirSync(stagingDirectory, { recursive: true });
+    fs.rmSync(stagedPath, { force: true });
+    fs.renameSync(temporaryPath, stagedPath);
+    const ticket = issueRestoreTicket(stagedPath);
+    return res.json({ summary, ticket });
+  } catch (error) {
+    if (req.aborted || res.destroyed) {
+      logger.warn("Backup inspection upload was interrupted", { error: backupErrorMessage(error) });
+    } else {
+      const status = backupErrorMessage(error).includes("2 GB limit") ? 413 : 400;
+      sendRouteError(res, error, status, "Backup file could not be inspected");
+    }
+  } finally {
+    fs.rmSync(temporaryPath, { force: true });
+  }
+});
+
+app.post("/api/backup/confirm", requireAuth, requireRole("admin"), (req, res) => {
+  const fileName = req.body?.file_name;
+  const sizeBytes = Number(req.body?.size_bytes);
+  if (
+    typeof fileName !== "string" ||
+    !fileName.trim() ||
+    path.basename(fileName) !== fileName ||
+    /[\\/\r\n]/.test(fileName)
+  ) {
+    return res.status(400).json({ error: "A valid backup file name is required" });
+  }
+  if (!Number.isSafeInteger(sizeBytes) || sizeBytes <= 0 || sizeBytes > MAX_BACKUP_BYTES) {
+    return res.status(400).json({ error: "Backup size is invalid" });
+  }
+
+  try {
+    db.transaction(() => {
+      db.prepare(
+        `INSERT INTO audit_log
+          (user_id, username, action, entity, details, ip_address, created_at)
+         VALUES (?, ?, 'BACKUP_CREATE', 'backup', ?, ?, datetime('now'))`,
+      ).run(
+        req.user.id,
+        req.user.username,
+        JSON.stringify({ file_name: fileName, size_bytes: sizeBytes }),
+        req.ip,
+      );
+      db.prepare(
+        `INSERT INTO settings (key, value, updated_at)
+         VALUES ('last_backup_at', datetime('now'), datetime('now'))
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+      ).run();
+    }).immediate();
+    res.json({ ok: true });
+  } catch (error) {
+    sendRouteError(res, error, 500, "Unable to record backup confirmation");
+  }
+});
+
+app.post("/api/backup/restore-apply", requireAuth, requireRole("admin"), async (req, res) => {
+  if (req.body?.confirm !== "RESTORE") {
+    return res.status(400).json({ error: 'Type "RESTORE" to confirm replacing the current data' });
+  }
+  if (typeof req.body?.ticket !== "string" || !req.body.ticket) {
+    return res.status(400).json({ error: "A valid restore ticket is required" });
+  }
+  const ticket = consumeRestoreTicket(req.body.ticket);
+  if (!ticket) return res.status(400).json({ error: "Restore ticket is invalid or already used" });
+  if (ticket.expired) {
+    fs.rmSync(ticket.stagedFile, { force: true });
+    return res.status(410).json({ error: "Restore ticket has expired; choose the file again" });
+  }
+
+  const safetyDirectory = path.join(DATA_DIR, "pre-restore");
+  const safetyName = `pre-restore-${new Date().toISOString().replace(/[:.]/g, "-")}-${crypto.randomBytes(4).toString("hex")}.db`;
+  const safetyPath = path.join(safetyDirectory, safetyName);
+  try {
+    fs.mkdirSync(safetyDirectory, { recursive: true });
+    await db.backup(safetyPath);
+    looksLikeGsnBackup(safetyPath);
+    const retainedCopies = fs
+      .readdirSync(safetyDirectory)
+      .filter((name) => name.startsWith("pre-restore-") && name.endsWith(".db"))
+      .map((name) => ({
+        name,
+        modified: fs.statSync(path.join(safetyDirectory, name)).mtimeMs,
+      }))
+      .sort((a, b) => b.modified - a.modified);
+    for (const oldCopy of retainedCopies.slice(5)) {
+      fs.rmSync(path.join(safetyDirectory, oldCopy.name), { force: true });
+    }
+
+    const pendingPath = path.join(DATA_DIR, "restore-pending.json");
+    const pendingTemporaryPath = `${pendingPath}.tmp`;
+    fs.writeFileSync(
+      pendingTemporaryPath,
+      JSON.stringify({ staged_file: ticket.stagedFile, safety_file: safetyPath }),
+      "utf8",
+    );
+    fs.renameSync(pendingTemporaryPath, pendingPath);
+
+    res.once("finish", () => {
+      server.close(() => {
+        closeDatabase();
+        process.send?.({ type: "restart-required" });
+        process.exit(75);
+      });
+    });
+    res.json({ ok: true, restarting: true });
+  } catch (error) {
+    fs.rmSync(safetyPath, { force: true });
+    sendRouteError(res, error, 500, "Unable to prepare database restore");
+  }
+});
+
 // ---------- Phase 2: Items & Formula/BOM ----------
 app.get("/api/items", requireAuth, (_req, res) => {
   const rows = db.prepare("SELECT * FROM items WHERE is_active = 1 ORDER BY id ASC").all();
@@ -2545,29 +2761,6 @@ app.post("/api/accounting/backpost/revert", requireAuth, requireRole("admin"), (
 
 app.get("/api/accounting/migration-log", requireAuth, requireRole("admin"), (_req, res) => {
   res.json(db.prepare("SELECT * FROM migration_log ORDER BY id DESC LIMIT 500").all());
-});
-
-// Restore always writes to a separate file. Overwriting the live database is
-// deliberately not exposed over HTTP.
-app.post("/api/backup/restore", requireAuth, requireRole("admin"), (req, res) => {
-  try {
-    res.json(restoreToNewFile(req.body?.backup_id ?? req.body?.file_name));
-  } catch (error) {
-    sendRouteError(res, error, 400, "Restore failed");
-  }
-});
-
-app.post("/api/backup/verify", requireAuth, requireRole("admin"), (req, res) => {
-  try {
-    const backup = resolveBackup(req.body?.backup_id ?? req.body?.file_name);
-    res.json({
-      backup_id: backup.id,
-      file_path: backup.file_path,
-      ...verifyDatabaseFile(backup.file_path),
-    });
-  } catch (error) {
-    sendRouteError(res, error, 400, "Verification failed");
-  }
 });
 
 app.use(express.static(WEB_DIR));

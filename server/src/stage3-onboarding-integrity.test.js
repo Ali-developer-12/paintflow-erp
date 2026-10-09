@@ -88,7 +88,10 @@ after(async () => {
 
 test("first-run setup is single-use, concurrent-safe, and logs in", async () => {
   const initialStatus = await api("GET", "/auth/status", undefined, null);
-  assert.deepEqual(initialStatus, { status: 200, json: { needsSetup: true } });
+  assert.deepEqual(initialStatus, {
+    status: 200,
+    json: { needsSetup: true, lastRestore: null },
+  });
 
   const attempts = await Promise.all([
     api("POST", "/auth/setup", { ...admin, full_name: "First Administrator" }, null),
@@ -109,6 +112,7 @@ test("first-run setup is single-use, concurrent-safe, and logs in", async () => 
   assert.equal(duplicate.status, 403);
   assert.deepEqual((await api("GET", "/auth/status", undefined, null)).json, {
     needsSetup: false,
+    lastRestore: null,
   });
   assert.equal(
     (await api("POST", "/auth/login", admin, null)).status,

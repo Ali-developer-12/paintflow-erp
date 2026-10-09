@@ -1,3 +1,4 @@
+import { applyPendingRestore } from "./pre-start.js";
 import Database from "better-sqlite3";
 import fs from "node:fs";
 import path from "node:path";
@@ -10,6 +11,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export { DATA_DIR, DB_PATH };
 
 ensureRuntimeDirs();
+applyPendingRestore();
 
 export const db = new Database(DB_PATH);
 db.pragma("journal_mode = WAL");

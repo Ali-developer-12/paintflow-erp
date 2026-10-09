@@ -24,9 +24,10 @@ Each **Counter Sale** and customer **Return** line has an editable **Cost** fiel
 
 ## Backup and restore
 
-- Open **Backup** and create a backup regularly, especially before restoring or doing other maintenance.
-- Restore and backup verification are administrator-only actions. Select a known-good backup in **Backup** and follow the confirmation shown in the application.
-- Keep a separate copy of important backups on storage protected from workstation failure. Do not edit database or backup files while the application is running.
+- In **Backup**, administrators can choose **Create Backup** or **Restore Backup**. Create a backup to a folder, or replace an existing verified GSN Paints backup after confirming the replacement warning.
+- Before restoring, review the company, date, record counts, and schema version. Type `RESTORE` only after checking the selected file. The current database is replaced; the application restarts and signs everyone out.
+- After a restore, sign in with the usernames and passwords stored in the selected backup. The current database is kept in `DATA_DIR\pre-restore` (the five most recent safety copies are retained).
+- Keep another copy of important backups on storage protected from workstation failure. Do not edit database or backup files while the application is running. Browsers without File System Access support download new backups normally and use a file picker for restore; replacing an existing backup is not offered there.
 
 ## Frequently asked questions
 
