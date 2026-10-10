@@ -1,6 +1,5 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("paintflowDesktop", {
-  saveBackup: (fileName, contents) =>
-    ipcRenderer.invoke("paintflow:save-backup", { fileName, contents }),
+  saveBackup: (fileName, token) => ipcRenderer.invoke("paintflow:save-backup", { fileName, token }),
 });
