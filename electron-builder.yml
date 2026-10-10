@@ -1,0 +1,39 @@
+appId: com.gsnpaints.erp
+productName: GSN Paints
+artifactName: GSN-Paints-${version}-mac-${arch}.${ext}
+
+files:
+  - dist/**
+  - electron/**
+  - server/**
+  - package.json
+  - package-lock.json
+  - "!**/*.map"
+  - "!**/.git/**"
+  - "!**/.env*"
+  - "!**/.output/**"
+  - "!**/docs/**"
+  - "!**/scripts/**"
+  - "!**/test-results/**"
+  - "!**/playwright-report/**"
+  - "!**/*.db"
+  - "!**/*.db-*"
+  - "!**/*.log"
+
+mac:
+  category: public.app-category.business
+  target:
+    - dmg
+    - zip
+  identity: null
+  gatekeeperAssess: false
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  minimumSystemVersion: "10.13"
+
+directories:
+  output: release
+
+extraMetadata:
+  name: GSN Paints

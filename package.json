@@ -1,16 +1,17 @@
 {
   "name": "paintflow-erp",
   "version": "1.0.0",
-  "description": "PaintFlow ERP for managing paint factory operations, stock, accounts, and reporting.",
+  "description": "GSN Paints for managing paint factory operations, stock, accounts, and reporting.",
   "private": true,
   "sideEffects": false,
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-    "electron:dev": "npm run build && electron electron/dev.cjs",
+    "electron:dev": "npm run build && electron electron/main.cjs",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
+    "dist:mac": "electron-builder --mac dmg zip --publish never",
     "test:e2e": "playwright test",
     "lint": "eslint .",
     "format": "prettier --write ."
@@ -81,6 +82,7 @@
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.2.0",
     "electron": "22.3.27",
+    "electron-builder": "^24.13.0",
     "eslint": "^9.32.0",
     "eslint-config-prettier": "^10.1.1",
     "eslint-plugin-prettier": "^5.2.6",

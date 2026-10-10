@@ -1,0 +1,47 @@
+name: build-mac
+
+on:
+  workflow_dispatch:
+
+jobs:
+  package-mac:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install server dependencies
+        run: npm --prefix server ci
+
+      - name: Server tests
+        run: (cd server && npm test)
+
+      - name: Build SPA
+        run: npm run build
+
+      - name: Package macOS app
+        run: npm run dist:mac
+
+      - name: Verify package output
+        run: |
+          ls -lh release || true
+          find release -maxdepth 2 -type f | sort
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: gsn-paints-mac
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.txt
+          if-no-files-found: error
