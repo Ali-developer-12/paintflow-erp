@@ -142,7 +142,7 @@ test("first run, ERP workflow, role controls, and every sidebar module at 1366x7
   });
   const screenshots = useBuiltApp
     ? path.join(dataDir, "screens")
-    : path.join(root, "docs", "reports", "screens");
+    : path.join(root, "docs", "reports", "screens-electron");
   fs.mkdirSync(screenshots, { recursive: true });
 
   const health = await (await request.get(`${apiUrl}/health`)).json();

@@ -17,7 +17,9 @@ const install = spawnSync(process.execPath, [npmCli, "run", "native:electron"], 
 if (install.error) throw install.error;
 if (install.status !== 0) process.exit(install.status ?? 1);
 
-const selectedTests = process.argv.slice(2).filter((argument) => argument.endsWith(".test.js"));
+const testArguments = process.argv.slice(2);
+const selectedTests = testArguments.filter((argument) => argument.endsWith(".test.js"));
+const nodeTestOptions = testArguments.filter((argument) => !argument.endsWith(".test.js"));
 const testFiles = selectedTests.length
   ? selectedTests
   : [
@@ -36,6 +38,7 @@ const result = spawnSync(
   [
     "--test",
     "--test-concurrency=1",
+    ...nodeTestOptions,
     ...testFiles.map((file) => path.join(serverDirectory, "src", file)),
   ],
   {

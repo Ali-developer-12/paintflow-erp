@@ -56,7 +56,7 @@ test("the default data directory is under the operating system user data root", 
   );
 
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(result.stdout.trim(), path.join(userDataRoot, "PaintFlow ERP"));
+  assert.equal(result.stdout.trim(), path.join(userDataRoot, "GSN Paints"));
 });
 
 test("a busy listen port exits with an actionable message", async () => {

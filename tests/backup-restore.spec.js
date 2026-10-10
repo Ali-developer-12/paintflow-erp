@@ -226,16 +226,12 @@ test("desktop backup bridge saves a verified snapshot through the native save di
   await page.addInitScript(() => {
     Object.defineProperty(window, "paintflowDesktop", {
       value: {
-        async saveBackup(fileName, contents) {
+        async saveBackup(fileName, token) {
           Object.defineProperty(window, "__desktopBackup", {
-            value: {
-              fileName,
-              size: contents.byteLength,
-              header: Array.from(contents.slice(0, 16)),
-            },
+            value: { fileName, token },
             configurable: true,
           });
-          return { canceled: false };
+          return { canceled: false, fileName, sizeBytes: 1024 };
         },
       },
       configurable: true,
@@ -249,10 +245,8 @@ test("desktop backup bridge saves a verified snapshot through the native save di
   await expect(page.getByRole("status")).toContainText("Backup created successfully.");
   const savedBackup = await page.evaluate(() => window.__desktopBackup);
   expect(savedBackup.fileName).toMatch(/^GSN-Paints-Backup_.*\.db$/);
-  expect(savedBackup.size).toBeGreaterThan(16);
-  expect(savedBackup.header).toEqual([
-    83, 81, 76, 105, 116, 101, 32, 102, 111, 114, 109, 97, 116, 32, 51, 0,
-  ]);
+  expect(savedBackup.token).toBeTruthy();
+  expect(Object.keys(savedBackup).sort()).toEqual(["fileName", "token"]);
 });
 
 test("fallback download and file upload restore the fresh database", async ({ page, request }) => {
