@@ -1,8 +1,8 @@
-# PaintFlow ERP User Quickstart
+# GSN Paints User Quickstart
 
 ## First run
 
-1. Start PaintFlow ERP and open its local address in a browser (by default, `http://127.0.0.1:3001`).
+1. Start GSN Paints and open its local address in a browser (by default, `http://127.0.0.1:3001`).
 2. On a new database, choose **Create administrator account**.
 3. Enter an administrator username, full name, and password of at least 8 characters. There is no default password.
 4. The new administrator is signed in automatically. Use **Sign out** to leave the workstation.
@@ -37,4 +37,4 @@ Each **Counter Sale** and customer **Return** line has an editable **Cost** fiel
 
 **Why is there an amber cost warning?** That line's cost is zero. You can proceed, or enter the cost you want to use for this transaction.
 
-**Where is my data stored?** By default, on Windows it is under `%LOCALAPPDATA%\PaintFlow ERP`. See [Administrator Notes](./ADMIN_NOTES.md) for platform paths and configuration.
+**Where is my data stored?** By default, on Windows it is under `%LOCALAPPDATA%\GSN Paints`. See [Administrator Notes](./ADMIN_NOTES.md) for platform paths and configuration.

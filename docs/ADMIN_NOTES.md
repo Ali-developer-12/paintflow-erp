@@ -1,4 +1,4 @@
-# PaintFlow ERP Administrator Notes
+# GSN Paints Administrator Notes
 
 ## Roles and permissions
 
@@ -19,8 +19,8 @@ The application recognizes the roles **admin**, **accountant**, and **user**. Th
 
 The default data directory is outside the source tree:
 
-- Windows: `%LOCALAPPDATA%\PaintFlow ERP`
-- Linux/macOS: `$XDG_DATA_HOME/PaintFlow ERP` when `XDG_DATA_HOME` is set; otherwise `~/.local/share/PaintFlow ERP`
+- Windows: `%LOCALAPPDATA%\GSN Paints`
+- Linux/macOS: `$XDG_DATA_HOME/GSN Paints` when `XDG_DATA_HOME` is set; otherwise `~/.local/share/GSN Paints`
 
 The directory contains the SQLite database, backups, and logs. `DATA_DIR` overrides the default; `DB_PATH`, `BACKUP_DIR`, and `LOGS_DIR` can override the individual paths. Keep all writable data on a local, backed-up disk and do not place it in the source or delivery archive.
 
