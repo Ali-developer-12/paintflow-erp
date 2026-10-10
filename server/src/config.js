@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-export const APP_NAME = "PaintFlow ERP";
+export const APP_NAME = "GSN Paints";
 export const APP_VERSION = "1.0.0";
 
 export const HOST = process.env.HOST || "127.0.0.1";
@@ -16,7 +16,7 @@ const defaultDataRoot =
     ...(process.platform === "win32" ? ["AppData", "Local"] : [".local", "share"]),
   );
 
-export const DATA_DIR = process.env.DATA_DIR || path.join(defaultDataRoot, "PaintFlow ERP");
+export const DATA_DIR = process.env.DATA_DIR || path.join(defaultDataRoot, "GSN Paints");
 export const DB_PATH = process.env.DB_PATH || path.join(DATA_DIR, "paint-erp.db");
 export const BACKUP_DIR = process.env.BACKUP_DIR || path.join(DATA_DIR, "backups");
 export const LOGS_DIR = process.env.LOGS_DIR || path.join(DATA_DIR, "logs");

@@ -40,7 +40,7 @@ db.prepare(
 ).run(`${year}-${year + 1}`, `${year}-07-01`, `${year + 1}-06-30`);
 
 db.prepare(
-  "INSERT OR IGNORE INTO settings (key, value) VALUES ('company_name', 'Paint Factory')",
+  "INSERT OR IGNORE INTO settings (key, value) VALUES ('company_name', 'GSN Paints')",
 ).run();
 
 console.log("Database initialised at", DB_PATH);

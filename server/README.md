@@ -1,4 +1,4 @@
-# Paint Factory ERP — Backend (Express + SQLite)
+# GSN Paints — Backend (Express + SQLite)
 
 Local-only API server. No cloud services.
 

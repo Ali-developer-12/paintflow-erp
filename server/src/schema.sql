@@ -1,4 +1,4 @@
--- Paint Factory ERP — full SQLite schema (all 13 modules)
+-- GSN Paints — full SQLite schema (all 13 modules)
 PRAGMA foreign_keys = ON;
 
 -- =========================================================

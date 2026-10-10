@@ -5,12 +5,12 @@ import { apiGet } from "@/lib/api";
 export const Route = createFileRoute("/app/")({
   head: () => ({
     meta: [
-      { title: "Dashboard — PaintFlow ERP" },
+      { title: "Dashboard — GSN Paints" },
       {
         name: "description",
         content: "Overview of your factory data across items, sales, stock and accounts.",
       },
-      { property: "og:title", content: "Dashboard — PaintFlow ERP" },
+      { property: "og:title", content: "Dashboard — GSN Paints" },
       {
         property: "og:description",
         content: "Overview of your factory data across items, sales, stock and accounts.",

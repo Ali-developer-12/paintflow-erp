@@ -7,13 +7,13 @@ import { API_URL, apiGet } from "@/lib/api";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Sign In — PaintFlow ERP" },
+      { title: "Sign In — GSN Paints" },
       {
         name: "description",
         content:
-          "Secure local sign-in for PaintFlow ERP: items, formulas, production, sales, stock and accounts.",
+          "Secure local sign-in for GSN Paints: items, formulas, production, sales, stock and accounts.",
       },
-      { property: "og:title", content: "Sign In — PaintFlow ERP" },
+      { property: "og:title", content: "Sign In — GSN Paints" },
       {
         property: "og:description",
         content: "Offline-first ERP for paint manufacturing and trading.",
@@ -92,7 +92,7 @@ function LoginPage() {
           <div className="flex h-9 w-9 items-center justify-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground">
             <Droplets className="h-5 w-5" />
           </div>
-          <span className="text-base font-semibold">PaintFlow ERP</span>
+          <span className="text-base font-semibold">GSN Paints</span>
         </div>
         <div className="max-w-md">
           <h1 className="text-4xl font-semibold leading-tight tracking-tight">

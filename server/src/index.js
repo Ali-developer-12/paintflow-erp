@@ -196,7 +196,7 @@ app.get("/api/health", (_req, res) => {
 
 app.get("/api/settings/company-name", requireAuth, (_req, res) => {
   const row = db.prepare("SELECT value FROM settings WHERE key = 'company_name' LIMIT 1").get();
-  res.json({ company_name: row?.value ?? "Paint Factory" });
+  res.json({ company_name: row?.value ?? "GSN Paints" });
 });
 
 // ---------- Auth ----------
@@ -2785,7 +2785,7 @@ const server = app.listen(PORT, HOST, () => {
   const address = server.address();
   const host = typeof address === "string" ? address : address?.address || HOST;
   const port = typeof address === "string" ? PORT : address?.port || PORT;
-  console.log(`Paint ERP API listening on http://${host}:${port}`);
+  console.log(`GSN Paints API listening on http://${host}:${port}`);
   console.log(`SQLite database: ${DB_PATH}`);
 });
 const serverSockets = new Set();
@@ -2798,7 +2798,7 @@ server.on("error", (error) => {
   if (error.code === "EADDRINUSE") {
     console.error(`Port ${PORT} is already in use on ${HOST}. Set PORT to an available port.`);
   } else {
-    console.error(`Unable to start the PaintFlow server: ${error.message}`);
+    console.error(`Unable to start the GSN Paints server: ${error.message}`);
   }
   closeDatabase();
   process.exitCode = 1;

@@ -38,7 +38,10 @@ type PickerWindow = Window & {
   showDirectoryPicker?: () => Promise<DirectoryHandle>;
   showOpenFilePicker?: (options?: { multiple?: boolean }) => Promise<FileHandle[]>;
   paintflowDesktop?: {
-    saveBackup(fileName: string, contents: Uint8Array): Promise<{ canceled: boolean }>;
+    saveBackup(
+      fileName: string,
+      token: string,
+    ): Promise<{ canceled: boolean; fileName?: string; sizeBytes?: number }>;
   };
 };
 
@@ -165,20 +168,17 @@ async function downloadSnapshot() {
 async function saveSnapshotWithDesktopDialog() {
   const desktopBridge = (window as PickerWindow).paintflowDesktop;
   if (!desktopBridge) throw new Error("Desktop backup saving is unavailable");
-  const response = await fetch(`${API_URL}/backup/snapshot`, { headers: authHeaders() });
-  if (!response.ok) throw new Error(await readResponseError(response));
-  const fileName = snapshotFileName(response);
-  const expectedSize = Number(response.headers.get("Content-Length") || 0);
-  const contents = new Uint8Array(await response.arrayBuffer());
-  if (!expectedSize || contents.byteLength !== expectedSize) {
-    throw new Error("Backup size did not match the server response");
-  }
-  if (!sqliteHeader.every((byte, i) => contents[i] === byte)) {
-    throw new Error("Backup download did not have a valid SQLite header");
-  }
-  const result = await desktopBridge.saveBackup(fileName, contents);
+  const token = getToken();
+  if (!token) throw new Error("Sign in again before creating a backup");
+  const result = await desktopBridge.saveBackup(
+    `GSN-Paints-Backup_${new Date().toISOString().replace("T", "_").slice(0, 19).replace(/:/g, "-")}.db`,
+    token,
+  );
   if (result.canceled) return false;
-  await confirmBackup(fileName, contents.byteLength);
+  if (!result.fileName || !result.sizeBytes) {
+    throw new Error("Desktop backup dialog did not confirm the saved file");
+  }
+  await confirmBackup(result.fileName, result.sizeBytes);
   return true;
 }
 

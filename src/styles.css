@@ -5,7 +5,7 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Paint Factory ERP design system.
+ * GSN Paints design system.
  * Industrial-modern: graphite surfaces, teal primary, amber accent.
  * All colors in oklch. Never hardcode colors in components.
  */

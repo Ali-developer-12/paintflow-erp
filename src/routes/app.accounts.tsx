@@ -1683,7 +1683,7 @@ function AccountsPage() {
           <div className="bg-card w-full max-w-2xl rounded-xl border border-border shadow-2xl p-6 space-y-6">
             <div className="flex justify-between items-start border-b border-border pb-4">
               <div>
-                <h2 className="text-xl font-bold tracking-tight">PaintFlow ERP</h2>
+                <h2 className="text-xl font-bold tracking-tight">GSN Paints</h2>
                 <p className="text-xs uppercase tracking-wider text-muted-foreground">
                   Industrial Factory Edition
                 </p>

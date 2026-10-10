@@ -27,7 +27,7 @@ function startServer() {
       return;
     }
 
-    console.log(`Restarting PaintFlow after database restore (${restartTimes.length}/3).`);
+    console.log(`Restarting GSN Paints after database restore (${restartTimes.length}/3).`);
     startServer();
   });
 }

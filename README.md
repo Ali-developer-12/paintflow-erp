@@ -1,6 +1,6 @@
-# PaintFlow ERP
+# GSN Paints
 
-PaintFlow ERP is a local-first ERP for a paint manufacturing and trading business. It combines a React + TanStack frontend with an Express + SQLite backend and is intended to run on a single Windows workstation without cloud services.
+GSN Paints is a local-first ERP for a paint manufacturing and trading business. It combines a React + TanStack frontend with an Express + SQLite backend and is intended to run on a single Windows workstation without cloud services.
 
 ## What this project includes
 
@@ -61,10 +61,10 @@ Use them as your starting point. Do not commit a real `.env` file with credentia
 The application stores SQLite data under `DATA_DIR`, which defaults outside the source tree to:
 
 ```text
-%LOCALAPPDATA%\PaintFlow ERP\
+%LOCALAPPDATA%\GSN Paints\
 ```
 
-On Linux and macOS, the default is `$XDG_DATA_HOME/PaintFlow ERP`, or `~/.local/share/PaintFlow ERP` if `XDG_DATA_HOME` is unset. Set `DATA_DIR` to choose another writable location.
+On Linux and macOS, the default is `$XDG_DATA_HOME/GSN Paints`, or `~/.local/share/GSN Paints` if `XDG_DATA_HOME` is unset. Set `DATA_DIR` to choose another writable location.
 
 ## Production start
 

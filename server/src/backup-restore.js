@@ -75,7 +75,7 @@ export function looksLikeGsnBackup(filePath) {
     ].reduce((sum, table) => sum + (tables.has(table) ? count(table) : 0), 0);
 
     return {
-      company_name: String(company?.value || "Paint Factory"),
+      company_name: String(company?.value || "GSN Paints"),
       backup_date: fs.statSync(filePath).mtime.toISOString(),
       counts: {
         ...Object.fromEntries(

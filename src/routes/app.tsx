@@ -14,7 +14,7 @@ function AppLayout() {
   const { user, ready, logout } = useAuth();
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
-  const [companyName, setCompanyName] = useState("Paint Factory");
+  const [companyName, setCompanyName] = useState("GSN Paints");
 
   useEffect(() => {
     if (ready && !user) void navigate({ to: "/" });
@@ -25,11 +25,11 @@ function AppLayout() {
 
     void apiGet<{ company_name?: string }>("/settings/company-name")
       .then((data) => {
-        const nextName = data?.company_name?.trim() || "Paint Factory";
+        const nextName = data?.company_name?.trim() || "GSN Paints";
         setCompanyName(nextName);
       })
       .catch(() => {
-        setCompanyName("Paint Factory");
+        setCompanyName("GSN Paints");
       });
   }, [ready, user]);
 
