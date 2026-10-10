@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import Database from "better-sqlite3";
+import Database from "./sqlite.js";
 import db, { DATA_DIR, DB_PATH } from "./db.js";
 
 // Backups are configurable but never accept an arbitrary client path: the

@@ -1,5 +1,5 @@
 import { applyPendingRestore } from "./pre-start.js";
-import Database from "better-sqlite3";
+import Database from "./sqlite.js";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

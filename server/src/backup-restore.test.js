@@ -4,7 +4,9 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { ReadableStream } from "node:stream/web";
 import test from "node:test";
+import { serverRuntimeEnv, serverRuntimePath } from "./test-runtime.js";
 import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
 import {
@@ -50,6 +52,9 @@ async function waitForHealth(baseUrl, child, previousInstanceId = null) {
   const deadline = Date.now() + 30_000;
   let lastError = "server did not respond";
   while (Date.now() < deadline) {
+    if (child.spawnError) {
+      throw new Error(`Server supervisor failed to start: ${child.output()}`);
+    }
     if (child.exitCode !== null) {
       throw new Error(`Supervisor exited with code ${child.exitCode}: ${child.output()}`);
     }
@@ -112,10 +117,9 @@ function getCompanyName(dbPath) {
 }
 
 function startSupervisor(dataDir, port) {
-  const child = spawn(process.execPath, ["src/run.js"], {
+  const child = spawn(serverRuntimePath(), ["src/run.js"], {
     cwd: serverDirectory,
-    env: {
-      ...process.env,
+    env: serverRuntimeEnv({
       HOST: "127.0.0.1",
       PORT: String(port),
       DATA_DIR: dataDir,
@@ -123,7 +127,7 @@ function startSupervisor(dataDir, port) {
       BACKUP_DIR: path.join(dataDir, "backups"),
       LOGS_DIR: path.join(dataDir, "logs"),
       ALLOWED_ORIGINS: "http://127.0.0.1:4173",
-    },
+    }),
     stdio: ["ignore", "pipe", "pipe"],
   });
   let output = "";
@@ -133,14 +137,19 @@ function startSupervisor(dataDir, port) {
   child.stderr.on("data", (chunk) => {
     output += chunk.toString();
   });
+  child.spawnError = null;
+  child.once("error", (error) => {
+    child.spawnError = error;
+    output += `\nFailed to spawn server supervisor: ${error.stack || error.message}`;
+  });
   child.output = () => output;
   return child;
 }
 
 async function stopSupervisor(child) {
-  if (!child || child.exitCode !== null) return;
+  if (!child || child.exitCode !== null || child.spawnError) return;
   const exited = new Promise((resolve) => child.once("exit", resolve));
-  child.kill("SIGTERM");
+  if (!child.kill("SIGTERM")) return;
   await exited;
 }
 

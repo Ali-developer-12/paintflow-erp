@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
+import { serverRuntimeEnv, serverRuntimePath } from "./test-runtime.js";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -52,7 +53,10 @@ async function startServer(extraEnv = {}) {
   delete env.PAINT_ERP_ADMIN_USERNAME;
   delete env.PAINT_ERP_ADMIN_PASSWORD;
   Object.assign(env, extraEnv);
-  child = spawn(process.execPath, [path.join(here, "index.js")], { env, stdio: "ignore" });
+  child = spawn(serverRuntimePath(), [path.join(here, "index.js")], {
+    env: serverRuntimeEnv(env),
+    stdio: "ignore",
+  });
 
   for (let attempt = 0; attempt < 120; attempt += 1) {
     if (child.exitCode !== null)

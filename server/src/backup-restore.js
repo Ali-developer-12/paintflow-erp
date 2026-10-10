@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import crypto from "node:crypto";
-import Database from "better-sqlite3";
+import Database from "./sqlite.js";
 import { TARGET_SCHEMA_VERSION } from "./schema-version.js";
 
 export const MAX_BACKUP_BYTES = 2 * 1024 * 1024 * 1024;

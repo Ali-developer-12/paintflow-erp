@@ -30,7 +30,7 @@ For a production run from a source checkout, install the root and `server` depen
 
 ## Backups
 
-Use the admin-only **Backup** module to create and restore backups. **Create Backup** saves a new file in a chosen folder or replaces an existing, validated GSN Paints backup after explicit confirmation. **Restore Backup** displays the file summary before requiring the exact word `RESTORE`; the server keeps a safety copy under `DATA_DIR\pre-restore` and retains the five most recent copies. A restore replaces the live database, restarts the server, invalidates every session, and requires sign-in with the users and passwords in the restored backup. Keep additional copies outside the workstation. Browsers without File System Access support offer download and upload fallback actions; they do not offer replacement.
+Use the admin-only **Backup** module to create and restore backups. In Electron, **Create Backup** opens the native Save dialog; in supported browsers, it saves into a chosen folder. Both flows can replace an existing, validated GSN Paints backup after explicit confirmation. **Restore Backup** displays the file summary before requiring the exact word `RESTORE`; the server keeps a safety copy under `DATA_DIR\pre-restore` and retains the five most recent copies. A restore replaces the live database, restarts the server, invalidates every session, and requires sign-in with the users and passwords in the restored backup. Keep additional copies outside the workstation. Browsers without File System Access support offer download and upload fallback actions; they do not offer replacement.
 
 ## If the application will not start
 

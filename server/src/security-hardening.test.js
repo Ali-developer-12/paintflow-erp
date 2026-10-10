@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { after, test } from "node:test";
+import { serverRuntimeEnv, serverRuntimePath } from "./test-runtime.js";
 import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
@@ -24,13 +25,13 @@ test("the server defaults to loopback when HOST is unset", () => {
   env.BACKUP_DIR = path.join(dataDir, "backups");
   env.LOGS_DIR = path.join(dataDir, "logs");
   const result = spawnSync(
-    process.execPath,
+    serverRuntimePath(),
     [
       "--input-type=module",
       "--eval",
       "import('./config.js').then(({ HOST }) => console.log(HOST))",
     ],
-    { cwd: new URL(".", import.meta.url), env, encoding: "utf8" },
+    { cwd: new URL(".", import.meta.url), env: serverRuntimeEnv(env), encoding: "utf8" },
   );
 
   assert.equal(result.status, 0, result.stderr);
@@ -45,13 +46,13 @@ test("the default data directory is under the operating system user data root", 
   delete env.BACKUP_DIR;
   delete env.LOGS_DIR;
   const result = spawnSync(
-    process.execPath,
+    serverRuntimePath(),
     [
       "--input-type=module",
       "--eval",
       "import('./config.js').then(({ DATA_DIR }) => console.log(DATA_DIR))",
     ],
-    { cwd: new URL(".", import.meta.url), env, encoding: "utf8" },
+    { cwd: new URL(".", import.meta.url), env: serverRuntimeEnv(env), encoding: "utf8" },
   );
 
   assert.equal(result.status, 0, result.stderr);
@@ -79,12 +80,16 @@ test("a busy listen port exits with an actionable message", async () => {
 
   let result;
   try {
-    result = spawnSync(process.execPath, [fileURLToPath(new URL("./index.js", import.meta.url))], {
-      cwd: serverDir,
-      env,
-      encoding: "utf8",
-      timeout: 15_000,
-    });
+    result = spawnSync(
+      serverRuntimePath(),
+      [fileURLToPath(new URL("./index.js", import.meta.url))],
+      {
+        cwd: serverDir,
+        env: serverRuntimeEnv(env),
+        encoding: "utf8",
+        timeout: 15_000,
+      },
+    );
   } finally {
     await new Promise((resolve, reject) =>
       occupiedServer.close((error) => (error ? reject(error) : resolve())),

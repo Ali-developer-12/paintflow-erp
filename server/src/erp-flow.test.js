@@ -1,4 +1,5 @@
 import { after, before, test } from "node:test";
+import { serverRuntimeEnv, serverRuntimePath } from "./test-runtime.js";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import crypto from "node:crypto";
@@ -107,15 +108,14 @@ before(async () => {
   dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "paint-erp-test-"));
   dbFile = path.join(dataDir, "paint-erp.db");
 
-  child = spawn(process.execPath, [path.join(here, "index.js")], {
-    env: {
-      ...process.env,
+  child = spawn(serverRuntimePath(), [path.join(here, "index.js")], {
+    env: serverRuntimeEnv({
       PORT: String(port),
       DATA_DIR: dataDir,
       DB_PATH: dbFile,
       PAINT_ERP_ADMIN_USERNAME: ADMIN_USER,
       PAINT_ERP_ADMIN_PASSWORD: ADMIN_PASS,
-    },
+    }),
     stdio: "ignore",
   });
 
@@ -141,6 +141,7 @@ after(async () => {
     try {
       fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     } catch {
+      if (attempt % 30 === 0) console.error("erp health probe not ready", attempt);
       // The temporary directory is disposable; a locked file must not fail the run.
     }
   }

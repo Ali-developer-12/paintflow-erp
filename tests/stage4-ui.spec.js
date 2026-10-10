@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { serverRuntimeEnv, serverRuntimePath } from "./server-runtime.js";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -33,7 +34,7 @@ function captureOutput(child) {
 
 async function waitFor(url, child, name) {
   let lastStatus = "no response";
-  const deadline = Date.now() + 60_000;
+  const deadline = Date.now() + 180_000;
   while (Date.now() < deadline) {
     if (child.exitCode !== null) throw new Error(`${name} exited before becoming ready`);
     try {
@@ -58,6 +59,7 @@ async function stop(child) {
 }
 
 test.beforeAll(async () => {
+  test.setTimeout(240_000);
   dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "paintflow-stage4-e2e-"));
   apiPort = await getFreePort();
   uiPort = apiPort;
@@ -79,9 +81,9 @@ test.beforeAll(async () => {
   };
   delete serverEnv.PAINT_ERP_ADMIN_USERNAME;
   delete serverEnv.PAINT_ERP_ADMIN_PASSWORD;
-  apiProcess = spawn(process.execPath, [path.join(root, "server", "src", "index.js")], {
+  apiProcess = spawn(serverRuntimePath, [path.join(root, "server", "src", "index.js")], {
     cwd: root,
-    env: serverEnv,
+    env: serverRuntimeEnv(serverEnv),
     stdio: ["ignore", "pipe", "pipe"],
   });
   apiProcess.output = captureOutput(apiProcess);
@@ -122,8 +124,11 @@ test("first run, ERP workflow, role controls, and every sidebar module at 1366x7
 }) => {
   const pageErrors = [];
   const externalRequests = [];
+  const authStatusRequests = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
   page.on("request", (browserRequest) => {
+    if (browserRequest.url().includes("/auth/status"))
+      authStatusRequests.push(browserRequest.url());
     if (useBuiltApp && new URL(browserRequest.url()).origin !== new URL(uiUrl).origin) {
       externalRequests.push(browserRequest.url());
     }
@@ -156,10 +161,22 @@ test("first run, ERP workflow, role controls, and every sidebar module at 1366x7
     }
   }
 
-  const browserSetupResponse = page.waitForResponse(
-    (response) =>
-      response.url() === `${apiUrl}/auth/status` && response.request().method() === "GET",
-  );
+  const browserSetupResponse = page
+    .waitForResponse(
+      (response) =>
+        response.url() === `${apiUrl}/auth/status` && response.request().method() === "GET",
+      { timeout: 60_000 },
+    )
+    .catch(async (error) => {
+      throw new Error(
+        `${error.message}; page=${page.url()}; auth requests=${JSON.stringify(authStatusRequests)}; page errors=${JSON.stringify(pageErrors)}; body=${(
+          await page
+            .locator("body")
+            .innerText()
+            .catch(() => "")
+        ).slice(0, 500)}`,
+      );
+    });
   await page.goto(uiUrl);
   const statusResponse = await browserSetupResponse;
   expect(statusResponse.ok()).toBeTruthy();
@@ -227,6 +244,27 @@ test("first run, ERP workflow, role controls, and every sidebar module at 1366x7
   await itemRow.locator("input").nth(2).fill("10");
   await itemRow.locator("input").nth(3).fill("15");
   await itemRow.locator("input").nth(4).fill("25");
+  const particularUpdate = () =>
+    page.waitForResponse(
+      (response) =>
+        response.url().includes("/particulars/") && response.request().method() === "PUT",
+    );
+  const minimumStock = itemRow.locator("input").nth(6);
+  const minimumSaved = particularUpdate();
+  await minimumStock.click();
+  await minimumStock.press("Control+A");
+  await minimumStock.pressSequentially("12");
+  await minimumStock.press("Tab");
+  expect((await minimumSaved).status()).toBe(200);
+  const maximumStock = itemRow.locator("input").nth(7);
+  const maximumSaved = particularUpdate();
+  await maximumStock.click();
+  await maximumStock.press("Control+A");
+  await maximumStock.pressSequentially("15");
+  await maximumStock.press("Tab");
+  expect((await maximumSaved).status()).toBe(200);
+  await expect(minimumStock).toHaveValue("12");
+  await expect(maximumStock).toHaveValue("15");
   await itemRow.getByRole("button", { name: "Formula" }).click();
   await expect(page.getByText("Formula / BOM", { exact: true }).last()).toBeVisible();
   await page.getByPlaceholder("F-001").fill("STAGE4-FORMULA");

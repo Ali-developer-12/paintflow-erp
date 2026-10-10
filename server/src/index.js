@@ -2217,7 +2217,9 @@ app.post("/api/backup/restore-apply", requireAuth, requireRole("admin"), async (
         process.send?.({ type: "restart-required" });
         process.exit(75);
       });
+      for (const socket of serverSockets) socket.destroy();
     });
+    res.setHeader("Connection", "close");
     res.json({ ok: true, restarting: true });
   } catch (error) {
     fs.rmSync(safetyPath, { force: true });
@@ -2785,6 +2787,11 @@ const server = app.listen(PORT, HOST, () => {
   const port = typeof address === "string" ? PORT : address?.port || PORT;
   console.log(`Paint ERP API listening on http://${host}:${port}`);
   console.log(`SQLite database: ${DB_PATH}`);
+});
+const serverSockets = new Set();
+server.on("connection", (socket) => {
+  serverSockets.add(socket);
+  socket.once("close", () => serverSockets.delete(socket));
 });
 
 server.on("error", (error) => {

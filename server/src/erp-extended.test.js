@@ -1,4 +1,5 @@
 import { after, before, test } from "node:test";
+import { serverRuntimeEnv, serverRuntimePath } from "./test-runtime.js";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
@@ -72,15 +73,14 @@ before(async () => {
   dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "paint-erp-ext-test-"));
   dbFile = path.join(dataDir, "paint-erp.db");
 
-  child = spawn(process.execPath, [path.join(here, "index.js")], {
-    env: {
-      ...process.env,
+  child = spawn(serverRuntimePath(), [path.join(here, "index.js")], {
+    env: serverRuntimeEnv({
       PORT: String(port),
       DATA_DIR: dataDir,
       DB_PATH: dbFile,
       PAINT_ERP_ADMIN_USERNAME: ADMIN_USER,
       PAINT_ERP_ADMIN_PASSWORD: ADMIN_PASS,
-    },
+    }),
     stdio: "ignore",
   });
 

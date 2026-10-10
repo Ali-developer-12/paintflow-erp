@@ -50,7 +50,7 @@ function LoginPage() {
           setRestoreNotice({
             ok: lastRestore.ok,
             message: lastRestore.ok
-              ? "Backup restored successfully."
+              ? "Backup restored successfully. Sign in with credentials saved in this backup; changes made afterward were rolled back."
               : `Backup restore failed: ${lastRestore.error || "The previous data was kept."}`,
           });
         }
@@ -74,7 +74,12 @@ function LoginPage() {
       else await login(username, password);
       void navigate({ to: "/app" });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Sign in failed");
+      const message = err instanceof Error ? err.message : "Sign in failed";
+      setError(
+        restoreNotice?.ok && message === "Invalid username or password"
+          ? `${message}. Use the credentials saved in the selected backup.`
+          : message,
+      );
     } finally {
       setBusy(false);
     }

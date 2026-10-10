@@ -1,0 +1,8 @@
+{
+  "name": "paintflow-electron-native",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "better-sqlite3": "9.6.0"
+  }
+}

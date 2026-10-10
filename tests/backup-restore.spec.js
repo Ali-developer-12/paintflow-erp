@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { serverRuntimeEnv, serverRuntimePath } from "./server-runtime.js";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -37,7 +38,13 @@ async function waitForServer(previousInstanceId = null) {
 }
 
 async function signIn(page) {
+  const setupStatus = page.waitForResponse(
+    (response) =>
+      response.url() === `${baseUrl}/api/auth/status` && response.request().method() === "GET",
+    { timeout: 60_000 },
+  );
   await page.goto(baseUrl);
+  await setupStatus;
   await expect(
     page.getByRole("heading", { name: /Create administrator account|Sign in/ }),
   ).toBeVisible();
@@ -79,9 +86,9 @@ test.beforeAll(async () => {
   };
   delete serverEnv.PAINT_ERP_ADMIN_USERNAME;
   delete serverEnv.PAINT_ERP_ADMIN_PASSWORD;
-  serverProcess = spawn(process.execPath, [path.join(root, "server", "src", "run.js")], {
+  serverProcess = spawn(serverRuntimePath, [path.join(root, "server", "src", "run.js")], {
     cwd: root,
-    env: serverEnv,
+    env: serverRuntimeEnv(serverEnv),
     stdio: ["ignore", "pipe", "pipe"],
   });
   serverProcess.stdout.on("data", (chunk) => {
@@ -198,14 +205,54 @@ test("File System Access flow creates, replaces, rejects invalid files, and rest
   await expect(page.getByRole("status")).toContainText("Restoring… the app is restarting");
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible({ timeout: 90_000 });
   await expect(page.getByRole("status")).toContainText("Backup restored successfully.");
+  await expect(page.getByRole("status")).toContainText("credentials saved in this backup");
   const restarted = await waitForServer(beforeRestore.instance_id);
   expect(restarted.instance_id).not.toBe(beforeRestore.instance_id);
+  await page.getByLabel("Username").fill(admin.username);
+  await page.getByLabel("Password").fill("WrongBackupPass123!");
+  await page.getByRole("button", { name: "Unlock" }).click();
+  await expect(page.getByText(/Use the credentials saved in the selected backup/)).toBeVisible();
   await signIn(page);
   const restoredToken = await page.evaluate(() => localStorage.getItem("paint-erp.token"));
   const customers = await request.get(`${baseUrl}/api/setup/customers`, {
     headers: { Authorization: `Bearer ${restoredToken}` },
   });
   expect(await customers.json()).toEqual([]);
+});
+
+test("desktop backup bridge saves a verified snapshot through the native save dialog", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "paintflowDesktop", {
+      value: {
+        async saveBackup(fileName, contents) {
+          Object.defineProperty(window, "__desktopBackup", {
+            value: {
+              fileName,
+              size: contents.byteLength,
+              header: Array.from(contents.slice(0, 16)),
+            },
+            configurable: true,
+          });
+          return { canceled: false };
+        },
+      },
+      configurable: true,
+    });
+  });
+  await signIn(page);
+  await page.goto(`${baseUrl}/app/backup`);
+  expect(await page.evaluate(() => typeof window.paintflowDesktop?.saveBackup)).toBe("function");
+  await page.getByRole("button", { name: "Create Backup" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Choose where to save" }).click();
+  await expect(page.getByRole("status")).toContainText("Backup created successfully.");
+  const savedBackup = await page.evaluate(() => window.__desktopBackup);
+  expect(savedBackup.fileName).toMatch(/^GSN-Paints-Backup_.*\.db$/);
+  expect(savedBackup.size).toBeGreaterThan(16);
+  expect(savedBackup.header).toEqual([
+    83, 81, 76, 105, 116, 101, 32, 102, 111, 114, 109, 97, 116, 32, 51, 0,
+  ]);
 });
 
 test("fallback download and file upload restore the fresh database", async ({ page, request }) => {

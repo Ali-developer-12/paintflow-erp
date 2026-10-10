@@ -37,6 +37,9 @@ type DirectoryHandle = {
 type PickerWindow = Window & {
   showDirectoryPicker?: () => Promise<DirectoryHandle>;
   showOpenFilePicker?: (options?: { multiple?: boolean }) => Promise<FileHandle[]>;
+  paintflowDesktop?: {
+    saveBackup(fileName: string, contents: Uint8Array): Promise<{ canceled: boolean }>;
+  };
 };
 
 const sqliteHeader = new TextEncoder().encode("SQLite format 3\0");
@@ -159,6 +162,26 @@ async function downloadSnapshot() {
   await confirmBackup(fileName, blob.size);
 }
 
+async function saveSnapshotWithDesktopDialog() {
+  const desktopBridge = (window as PickerWindow).paintflowDesktop;
+  if (!desktopBridge) throw new Error("Desktop backup saving is unavailable");
+  const response = await fetch(`${API_URL}/backup/snapshot`, { headers: authHeaders() });
+  if (!response.ok) throw new Error(await readResponseError(response));
+  const fileName = snapshotFileName(response);
+  const expectedSize = Number(response.headers.get("Content-Length") || 0);
+  const contents = new Uint8Array(await response.arrayBuffer());
+  if (!expectedSize || contents.byteLength !== expectedSize) {
+    throw new Error("Backup size did not match the server response");
+  }
+  if (!sqliteHeader.every((byte, i) => contents[i] === byte)) {
+    throw new Error("Backup download did not have a valid SQLite header");
+  }
+  const result = await desktopBridge.saveBackup(fileName, contents);
+  if (result.canceled) return false;
+  await confirmBackup(fileName, contents.byteLength);
+  return true;
+}
+
 function BackupPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -175,6 +198,8 @@ function BackupPage() {
   const [error, setError] = useState("");
   const fallbackInput = useRef<HTMLInputElement>(null);
   const pickerWindow = (typeof window === "undefined" ? {} : window) as PickerWindow;
+  const desktopBridge =
+    typeof window === "undefined" ? undefined : (window as PickerWindow).paintflowDesktop;
 
   useEffect(() => {
     if (user && user.role !== "admin") {
@@ -206,6 +231,22 @@ function BackupPage() {
   }
 
   async function saveToFolder() {
+    if (desktopBridge) {
+      setCreateOpen(false);
+      setBusy(true);
+      clearNotices();
+      try {
+        if (await saveSnapshotWithDesktopDialog()) {
+          setLastBackup(new Date().toISOString());
+          setMessage("Backup created successfully.");
+        }
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "Backup could not be created");
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     if (!pickerWindow.showDirectoryPicker) {
       setCreateOpen(false);
       await downloadSnapshot();
@@ -454,13 +495,13 @@ function BackupPage() {
                 <X className="h-4 w-4" />
               </Button>
             </div>
-            {pickerWindow.showDirectoryPicker ? (
+            {desktopBridge || pickerWindow.showDirectoryPicker ? (
               <div className="grid gap-3">
                 <Button onClick={() => void saveToFolder()}>
                   <FolderOpen className="mr-2 h-4 w-4" />
-                  Choose a folder
+                  {desktopBridge ? "Choose where to save" : "Choose a folder"}
                 </Button>
-                {pickerWindow.showOpenFilePicker && (
+                {!desktopBridge && pickerWindow.showOpenFilePicker && (
                   <Button variant="outline" onClick={() => void chooseFileToReplace()}>
                     Choose an existing backup file
                   </Button>

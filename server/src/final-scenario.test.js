@@ -460,12 +460,16 @@ test("legacy back-posting is idempotent, balanced, auditable and reversible", ()
   const before = backpost.backpostReport();
   assert.equal(before.pending.length, 3);
   assert.equal(before.already_posted, 0);
-  assert.ok(before.pending.find((row) => row.ref_type === "sale").notes.some((note) =>
-    /No historical cost snapshot/.test(note),
-  ));
-  assert.ok(before.pending.find((row) => row.ref_type === "purchase").notes.some((note) =>
-    /Inventory control account/.test(note),
-  ));
+  assert.ok(
+    before.pending
+      .find((row) => row.ref_type === "sale")
+      .notes.some((note) => /No historical cost snapshot/.test(note)),
+  );
+  assert.ok(
+    before.pending
+      .find((row) => row.ref_type === "purchase")
+      .notes.some((note) => /Inventory control account/.test(note)),
+  );
   const dryRun = backpost.runBackpost({ dryRun: true });
   assert.equal(dryRun.posted.length, 0);
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM account_vouchers").get().count, 0);
@@ -473,7 +477,14 @@ test("legacy back-posting is idempotent, balanced, auditable and reversible", ()
   const result = backpost.runBackpost();
   assert.equal(result.failed.length, 0, JSON.stringify(result.failed));
   assert.equal(result.posted.length, 3);
-  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM migration_log WHERE migration = ? AND action = 'posted'").get(backpost.MIGRATION_NAME).count, 3);
+  assert.equal(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM migration_log WHERE migration = ? AND action = 'posted'",
+      )
+      .get(backpost.MIGRATION_NAME).count,
+    3,
+  );
   assert.equal(accounting.trialBalance().balanced, true);
 
   const rerun = backpost.runBackpost();

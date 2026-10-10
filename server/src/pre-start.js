@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import crypto from "node:crypto";
 import path from "node:path";
-import Database from "better-sqlite3";
+import Database from "./sqlite.js";
 import { DATA_DIR, DB_PATH, ensureRuntimeDirs } from "./config.js";
 import { looksLikeGsnBackup } from "./backup-restore.js";
 

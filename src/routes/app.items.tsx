@@ -29,6 +29,8 @@ type Particular = {
   sort_order: number;
 };
 
+type StockLimitField = "min_qty" | "max_qty";
+
 type FactoryItem = {
   id: number;
   code: string;
@@ -57,6 +59,9 @@ function ItemsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [modalParticular, setModalParticular] = useState<Particular | null>(null);
+  const [stockLimitDrafts, setStockLimitDrafts] = useState<
+    Record<number, Partial<Record<StockLimitField, string>>>
+  >({});
 
   const loadItems = useCallback(async () => {
     const rows = await apiGet<Item[]>("/items");
@@ -151,6 +156,27 @@ function ItemsPage() {
       payload,
     );
     setParticulars((cur) => cur.map((r) => (r.id === updated.id ? updated : r)));
+  }
+
+  function updateStockLimitDraft(row: Particular, field: StockLimitField, value: string) {
+    setStockLimitDrafts((current) => ({
+      ...current,
+      [row.id]: { ...current[row.id], [field]: value },
+    }));
+  }
+
+  async function commitStockLimit(row: Particular, field: StockLimitField) {
+    const value = stockLimitDrafts[row.id]?.[field];
+    if (value === undefined) return;
+    await updateParticular(row, field, Number(value));
+    setStockLimitDrafts((current) => {
+      const rowDraft = { ...current[row.id] };
+      delete rowDraft[field];
+      const next = { ...current };
+      if (Object.keys(rowDraft).length === 0) delete next[row.id];
+      else next[row.id] = rowDraft;
+      return next;
+    });
   }
 
   async function deleteParticular(row: Particular) {
@@ -368,26 +394,20 @@ function ItemsPage() {
                           <input
                             className="w-20 rounded-md border px-2 py-1"
                             disabled={!canManage}
-                            value={row.min_qty}
+                            value={stockLimitDrafts[row.id]?.min_qty ?? row.min_qty}
                             type="number"
-                            onChange={(e) =>
-                              void runAction(() =>
-                                updateParticular(row, "min_qty", Number(e.target.value)),
-                              )
-                            }
+                            onChange={(e) => updateStockLimitDraft(row, "min_qty", e.target.value)}
+                            onBlur={() => void runAction(() => commitStockLimit(row, "min_qty"))}
                           />
                         </td>
                         <td className="px-3 py-2">
                           <input
                             className="w-20 rounded-md border px-2 py-1"
                             disabled={!canManage}
-                            value={row.max_qty}
+                            value={stockLimitDrafts[row.id]?.max_qty ?? row.max_qty}
                             type="number"
-                            onChange={(e) =>
-                              void runAction(() =>
-                                updateParticular(row, "max_qty", Number(e.target.value)),
-                              )
-                            }
+                            onChange={(e) => updateStockLimitDraft(row, "max_qty", e.target.value)}
+                            onBlur={() => void runAction(() => commitStockLimit(row, "max_qty"))}
                           />
                         </td>
                         <td className="px-3 py-2">
