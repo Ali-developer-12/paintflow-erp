@@ -17,9 +17,9 @@ if (process.env.GSN_SMOKE_DEBUG_PORT) {
   app.commandLine.appendSwitch("remote-debugging-address", "127.0.0.1");
   app.commandLine.appendSwitch("remote-debugging-port", process.env.GSN_SMOKE_DEBUG_PORT);
 }
-const rootDirectory = path.resolve(__dirname, "..");
-const serverDirectory = path.join(rootDirectory, "server");
 const packaged = app.isPackaged;
+const rootDirectory = packaged ? process.resourcesPath : path.resolve(__dirname, "..");
+const serverDirectory = path.join(rootDirectory, "server");
 const dataDirectory = packaged
   ? path.join(app.getPath("userData"), "data")
   : process.env.GSN_SMOKE_USER_DATA_DIR
@@ -175,7 +175,7 @@ async function start() {
             ELECTRON_RUN_AS_NODE: "1",
             GSN_SQLITE_MODULE: path.join(
               process.resourcesPath,
-              "app.asar.unpacked",
+              "app.asar",
               "server",
               "electron-runtime",
               "node_modules",

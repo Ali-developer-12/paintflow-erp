@@ -3,19 +3,9 @@ productName: GSN Paints
 artifactName: GSN-Paints-${version}-mac-${arch}.${ext}
 
 files:
-  - dist/**
   - electron/**
-  - server/src/**
-  - server/package.json
-  - server/node_modules/**
   - server/electron-runtime/node_modules/**
   - package.json
-  - "!server/src/**/*.test.js"
-  - "!server/src/run-electron-tests.js"
-  - "!server/src/install-electron-native.js"
-  - "!server/src/test-compat.js"
-  - "!server/src/test-runner.js"
-  - "!server/src/test-runtime.js"
   - "!**/*.map"
   - "!**/.git/**"
   - "!**/.env*"
@@ -31,6 +21,30 @@ files:
   - "!server/node_modules/.bin/**"
 
 includeSubNodeModules: true
+
+extraResources:
+  - from: dist
+    to: dist
+    filter:
+      - "**/*"
+  - from: server/src
+    to: server/src
+    filter:
+      - "**/*"
+      - "!**/*.test.js"
+      - "!run-electron-tests.js"
+      - "!install-electron-native.js"
+      - "!test-compat.js"
+      - "!test-runner.js"
+      - "!test-runtime.js"
+  - from: server/package.json
+    to: server/package.json
+  - from: server/node_modules
+    to: server/node_modules
+    filter:
+      - "**/*"
+      - "!better-sqlite3/**"
+      - "!.bin/**"
 
 asarUnpack:
   - server/electron-runtime/node_modules/better-sqlite3/build/Release/*.node
