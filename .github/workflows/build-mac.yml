@@ -32,11 +32,11 @@ jobs:
       MAC_ARCH: ${{ matrix.arch }}
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
     steps:
-      - name: Prepare log directory
-        run: mkdir -p build-logs
-
       - name: Check out gsn-mac
         uses: actions/checkout@v7
+
+      - name: Prepare log directory
+        run: mkdir -p build-logs
 
       - name: Set up Node.js 22
         uses: actions/setup-node@v7
@@ -47,17 +47,20 @@ jobs:
       - name: Install application dependencies
         run: |
           set -euo pipefail
+          mkdir -p build-logs
           npm ci 2>&1 | tee build-logs/npm-root.log
           npm --prefix server ci 2>&1 | tee build-logs/npm-server.log
 
       - name: Run server tests
         run: |
           set -euo pipefail
+          mkdir -p build-logs
           npm test --prefix server 2>&1 | tee build-logs/server-tests.log
 
       - name: Build the application
         run: |
           set -euo pipefail
+          mkdir -p build-logs
           npm run build 2>&1 | tee build-logs/app-build.log
 
       - name: Install the Electron SQLite binary for this Mac
@@ -65,6 +68,7 @@ jobs:
           npm_config_arch: ${{ matrix.arch }}
         run: |
           set -euo pipefail
+          mkdir -p build-logs
           npm run native:electron --prefix server 2>&1 | tee build-logs/electron-native.log
 
       - name: Package DMG and ZIP for this Mac
@@ -76,6 +80,7 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -euo pipefail
+          mkdir -p build-logs
           npx electron-builder --mac dmg zip --${MAC_ARCH} --publish never 2>&1 | tee build-logs/electron-builder.log
           APP_PATH="$(find release -type d -name 'GSN Paints.app' -print -quit)"
           test -n "$APP_PATH"
@@ -84,6 +89,7 @@ jobs:
       - name: Verify app, native architecture, signatures, DMG, and ZIP
         run: |
           set -euo pipefail
+          mkdir -p build-logs
           VERSION="$(node -p "require('./package.json').version")"
           DMG_PATH="release/GSN-Paints-${VERSION}-mac-${MAC_ARCH}.dmg"
           ZIP_PATH="release/GSN-Paints-${VERSION}-mac-${MAC_ARCH}.zip"
@@ -94,11 +100,13 @@ jobs:
       - name: Smoke test the installed app
         run: |
           set -euo pipefail
+          mkdir -p build-logs
           node scripts/smoke-packaged.mjs --app "$APP_PATH" 2>&1 | tee build-logs/packaged-smoke.log
 
       - name: Create artifact checksums
         run: |
           set -euo pipefail
+          mkdir -p build-logs
           find release -maxdepth 1 -type f \( -name '*.dmg' -o -name '*.zip' \) -print0 \
             | sort -z \
             | xargs -0 shasum -a 256 > release/SHA256SUMS.txt
