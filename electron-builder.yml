@@ -43,7 +43,8 @@ mac:
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   minimumSystemVersion: "10.13"
-  afterSign: scripts/after-sign-macos.cjs
+
+afterSign: scripts/after-sign-macos.cjs
 
 dmg:
   contents:
