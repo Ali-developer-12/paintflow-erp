@@ -8,6 +8,7 @@ node_modules/
 .wrangler/
 .tanstack/
 release/
+build-logs/
 dist/
 dist-ssr/
 .nitro
@@ -56,3 +57,6 @@ server/data/
 docs/reports/screens/
 docs/reports/screens-electron/
 paintflow-erp-delivery.zip
+*.dmg
+*.zip
+*.exe

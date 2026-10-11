@@ -5,9 +5,17 @@ artifactName: GSN-Paints-${version}-mac-${arch}.${ext}
 files:
   - dist/**
   - electron/**
-  - server/**
+  - server/src/**
+  - server/package.json
+  - server/node_modules/**
+  - server/electron-runtime/node_modules/**
   - package.json
-  - package-lock.json
+  - "!server/src/**/*.test.js"
+  - "!server/src/run-electron-tests.js"
+  - "!server/src/install-electron-native.js"
+  - "!server/src/test-compat.js"
+  - "!server/src/test-runner.js"
+  - "!server/src/test-runtime.js"
   - "!**/*.map"
   - "!**/.git/**"
   - "!**/.env*"
@@ -19,21 +27,36 @@ files:
   - "!**/*.db"
   - "!**/*.db-*"
   - "!**/*.log"
+  - "!server/node_modules/better-sqlite3/**"
+  - "!server/node_modules/.bin/**"
+
+asarUnpack:
+  - server/electron-runtime/node_modules/better-sqlite3/build/Release/*.node
 
 mac:
   category: public.app-category.business
+  icon: build/icon.png
   target:
     - dmg
     - zip
-  identity: null
-  gatekeeperAssess: false
   hardenedRuntime: true
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   minimumSystemVersion: "10.13"
+  afterSign: scripts/after-sign-macos.cjs
+
+dmg:
+  contents:
+    - x: 130
+      y: 220
+      type: file
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+  window:
+    width: 540
+    height: 380
 
 directories:
   output: release
-
-extraMetadata:
-  name: GSN Paints

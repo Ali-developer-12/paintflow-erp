@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "GSN Paints for managing paint factory operations, stock, accounts, and reporting.",
   "private": true,
+  "main": "electron/main.cjs",
   "sideEffects": false,
   "type": "module",
   "scripts": {
@@ -12,6 +13,9 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "dist:mac": "electron-builder --mac dmg zip --publish never",
+    "dist:mac:win": "node scripts/build-mac-from-windows.mjs",
+    "smoke:packaged": "node scripts/smoke-packaged.mjs",
+    "verify:mac-bundle": "node scripts/verify-mac-bundle.mjs",
     "test:e2e": "playwright test",
     "lint": "eslint .",
     "format": "prettier --write ."

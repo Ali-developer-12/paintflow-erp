@@ -1,47 +1,118 @@
-name: build-mac
+name: macOS build
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - gsn-mac
+    paths-ignore:
+      - "docs/**"
+      - "*.md"
+
+concurrency:
+  group: gsn-mac-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   package-mac:
-    runs-on: macos-14
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+          - arch: x64
+            runner: macos-15-intel
+    runs-on: ${{ matrix.runner }}
+    env:
+      MAC_ARCH: ${{ matrix.arch }}
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Prepare log directory
+        run: mkdir -p build-logs
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Check out gsn-mac
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
 
-      - name: Install root dependencies
-        run: npm ci
-
-      - name: Install server dependencies
-        run: npm --prefix server ci
-
-      - name: Server tests
-        run: (cd server && npm test)
-
-      - name: Build SPA
-        run: npm run build
-
-      - name: Package macOS app
-        run: npm run dist:mac
-
-      - name: Verify package output
+      - name: Install application dependencies
         run: |
-          ls -lh release || true
-          find release -maxdepth 2 -type f | sort
+          set -euo pipefail
+          npm ci 2>&1 | tee build-logs/npm-root.log
+          npm --prefix server ci 2>&1 | tee build-logs/npm-server.log
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+      - name: Run server tests
+        run: |
+          set -euo pipefail
+          npm test --prefix server 2>&1 | tee build-logs/server-tests.log
+
+      - name: Build the application
+        run: |
+          set -euo pipefail
+          npm run build 2>&1 | tee build-logs/app-build.log
+
+      - name: Install the Electron SQLite binary for this Mac
+        env:
+          npm_config_arch: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          npm run native:electron --prefix server 2>&1 | tee build-logs/electron-native.log
+
+      - name: Package DMG and ZIP for this Mac
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          npx electron-builder --mac dmg zip --${MAC_ARCH} --publish never 2>&1 | tee build-logs/electron-builder.log
+          APP_PATH="$(find release -type d -name 'GSN Paints.app' -print -quit)"
+          test -n "$APP_PATH"
+          echo "APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
+
+      - name: Verify app, native architecture, signatures, DMG, and ZIP
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p "require('./package.json').version")"
+          DMG_PATH="release/GSN-Paints-${VERSION}-mac-${MAC_ARCH}.dmg"
+          ZIP_PATH="release/GSN-Paints-${VERSION}-mac-${MAC_ARCH}.zip"
+          test -f "$DMG_PATH"
+          test -f "$ZIP_PATH"
+          bash scripts/verify-macos-package.sh "$MAC_ARCH" "$APP_PATH" "$DMG_PATH" "$ZIP_PATH" 2>&1 | tee build-logs/package-verification.log
+
+      - name: Smoke test the installed app
+        run: |
+          set -euo pipefail
+          node scripts/smoke-packaged.mjs --app "$APP_PATH" 2>&1 | tee build-logs/packaged-smoke.log
+
+      - name: Create artifact checksums
+        run: |
+          set -euo pipefail
+          find release -maxdepth 1 -type f \( -name '*.dmg' -o -name '*.zip' \) -print0 \
+            | sort -z \
+            | xargs -0 shasum -a 256 > release/SHA256SUMS.txt
+          cat release/SHA256SUMS.txt
+
+      - name: Upload installers and build logs
+        if: always()
+        uses: actions/upload-artifact@v7
         with:
-          name: gsn-paints-mac
+          name: gsn-paints-macos-${{ matrix.arch }}
           path: |
             release/*.dmg
             release/*.zip
-            release/*.txt
+            release/SHA256SUMS.txt
+            build-logs/**
           if-no-files-found: error
+          retention-days: 7

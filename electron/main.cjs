@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, Menu } = require("electron");
 const { spawn } = require("node:child_process");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
@@ -9,10 +9,30 @@ const path = require("node:path");
 const { Transform } = require("node:stream");
 const { pipeline } = require("node:stream/promises");
 
+app.setName("GSN Paints");
+if (process.env.GSN_SMOKE_USER_DATA_DIR) {
+  app.setPath("userData", path.resolve(process.env.GSN_SMOKE_USER_DATA_DIR));
+}
+if (process.env.GSN_SMOKE_DEBUG_PORT) {
+  app.commandLine.appendSwitch("remote-debugging-address", "127.0.0.1");
+  app.commandLine.appendSwitch("remote-debugging-port", process.env.GSN_SMOKE_DEBUG_PORT);
+}
 const rootDirectory = path.resolve(__dirname, "..");
 const serverDirectory = path.join(rootDirectory, "server");
-const dataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "paintflow-electron-dev-"));
-const systemNode = process.env.PAINTFLOW_NODE_EXECUTABLE || "node";
+const packaged = app.isPackaged;
+const dataDirectory = packaged
+  ? path.join(app.getPath("userData"), "data")
+  : process.env.GSN_SMOKE_USER_DATA_DIR
+    ? path.join(path.resolve(process.env.GSN_SMOKE_USER_DATA_DIR), "data")
+    : fs.mkdtempSync(path.join(os.tmpdir(), "paintflow-electron-dev-"));
+const backupDirectory =
+  process.env.GSN_SMOKE_AUTOMATION === "1"
+    ? path.join(dataDirectory, "backups")
+    : packaged
+      ? path.join(app.getPath("documents"), "GSN Paints Backups")
+      : path.join(dataDirectory, "backups");
+const bundledElectronNode = packaged && !process.env.PAINTFLOW_NODE_EXECUTABLE;
+const systemNode = process.env.PAINTFLOW_NODE_EXECUTABLE || (packaged ? process.execPath : "node");
 let apiProcess;
 let shuttingDown = false;
 const maxBackupBytes = 2 * 1024 * 1024 * 1024;
@@ -128,11 +148,14 @@ async function shutdown() {
   if (shuttingDown) return;
   shuttingDown = true;
   await stop(apiProcess);
-  fs.rmSync(dataDirectory, { recursive: true, force: true, maxRetries: 10 });
+  if (!packaged && !process.env.GSN_SMOKE_USER_DATA_DIR) {
+    fs.rmSync(dataDirectory, { recursive: true, force: true, maxRetries: 10 });
+  }
 }
 
 async function start() {
   console.log(`Electron runtime versions: ${JSON.stringify(process.versions)}`);
+  fs.mkdirSync(backupDirectory, { recursive: true });
   const apiPort = await freePort();
   const appUrl = `http://127.0.0.1:${apiPort}`;
 
@@ -144,9 +167,22 @@ async function start() {
       PORT: String(apiPort),
       DATA_DIR: dataDirectory,
       DB_PATH: path.join(dataDirectory, "paint-erp.db"),
-      BACKUP_DIR: path.join(dataDirectory, "backups"),
+      BACKUP_DIR: backupDirectory,
       LOGS_DIR: path.join(dataDirectory, "logs"),
       ALLOWED_ORIGINS: appUrl,
+      ...(bundledElectronNode
+        ? {
+            ELECTRON_RUN_AS_NODE: "1",
+            GSN_SQLITE_MODULE: path.join(
+              process.resourcesPath,
+              "app.asar.unpacked",
+              "server",
+              "electron-runtime",
+              "node_modules",
+              "better-sqlite3",
+            ),
+          }
+        : {}),
     },
     stdio: "inherit",
   });
@@ -177,15 +213,56 @@ async function start() {
       !request.token
     )
       throw new Error("The backup request is invalid");
-    const result = await dialog.showSaveDialog(window, {
-      title: "Save GSN Paints Backup",
-      defaultPath: path.join(os.homedir(), "Downloads", path.basename(request.fileName)),
-      filters: [{ name: "GSN Paints backup", extensions: ["db"] }],
-    });
-    if (result.canceled || !result.filePath) return { canceled: true };
-    const saved = await saveServerSnapshot(appUrl, request.token, result.filePath);
+    let destinationPath;
+    if (process.env.GSN_SMOKE_AUTOMATION === "1" && process.env.GSN_SMOKE_BACKUP_PATH) {
+      destinationPath = path.resolve(process.env.GSN_SMOKE_BACKUP_PATH);
+    } else {
+      const result = await dialog.showSaveDialog(window, {
+        title: "Save GSN Paints Backup",
+        defaultPath: path.join(
+          app.getPath("documents"),
+          "GSN Paints Backups",
+          path.basename(request.fileName),
+        ),
+        filters: [{ name: "GSN Paints backup", extensions: ["db"] }],
+      });
+      if (result.canceled || !result.filePath) return { canceled: true };
+      destinationPath = result.filePath;
+    }
+    fs.mkdirSync(path.dirname(destinationPath), { recursive: true });
+    const saved = await saveServerSnapshot(appUrl, request.token, destinationPath);
     return { canceled: false, ...saved };
   });
+  if (process.platform === "darwin") {
+    Menu.setApplicationMenu(
+      Menu.buildFromTemplate([
+        {
+          label: app.name,
+          submenu: [
+            { role: "about" },
+            { type: "separator" },
+            { role: "hide" },
+            { role: "hideOthers" },
+            { role: "unhide" },
+            { type: "separator" },
+            { role: "quit" },
+          ],
+        },
+        {
+          label: "Edit",
+          submenu: [
+            { role: "undo" },
+            { role: "redo" },
+            { type: "separator" },
+            { role: "cut" },
+            { role: "copy" },
+            { role: "paste" },
+            { role: "selectAll" },
+          ],
+        },
+      ]),
+    );
+  }
   let redirectToBackupAfterAuthentication = true;
   const backupRouteTimer = setInterval(() => {
     if (!redirectToBackupAfterAuthentication || window.isDestroyed()) return;
@@ -215,7 +292,7 @@ async function start() {
       `File System Access: window.showDirectoryPicker=${support.showDirectoryPicker}; window.showOpenFilePicker=${support.showOpenFilePicker}`,
     );
   });
-  await window.loadURL(`${appUrl}/app/backup`);
+  await window.loadURL(appUrl);
 }
 
 app
