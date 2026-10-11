@@ -35,12 +35,12 @@ verify_app() {
     exit 1
   fi
   file "$executable" "$sqlite"
-  lipo -verify_arch "$EXPECTED_ARCH" "$executable"
-  lipo -verify_arch "$EXPECTED_ARCH" "$sqlite"
+  lipo "$executable" -verify_arch "$EXPECTED_ARCH"
+  lipo "$sqlite" -verify_arch "$EXPECTED_ARCH"
   local executable_archs
   local sqlite_archs
-  executable_archs="$(lipo -archs "$executable")"
-  sqlite_archs="$(lipo -archs "$sqlite")"
+  executable_archs="$(lipo "$executable" -archs)"
+  sqlite_archs="$(lipo "$sqlite" -archs)"
   test "$executable_archs" = "$EXPECTED_ARCH"
   test "$sqlite_archs" = "$EXPECTED_ARCH"
   codesign --verify --deep --strict --verbose=2 "$app_path"
