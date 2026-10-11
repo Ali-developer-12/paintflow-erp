@@ -8,12 +8,13 @@
 // Runs against a throwaway temporary database and NEVER touches server/data.
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import test, { after, before } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const tmpRoot = fs.mkdtempSync(path.join(__dirname, "..", "data", "scenario-"));
+const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "paint-erp-final-scenario-"));
 
 process.env.DATA_DIR = tmpRoot;
 process.env.BACKUP_DIR = path.join(tmpRoot, "backups");
