@@ -16,6 +16,14 @@ function signatureDetails(appPath) {
   return `${result.stdout || ""}\n${result.stderr || ""}`;
 }
 
+function verifySignature(appPath) {
+  const result = spawnSync("codesign", ["--verify", "--deep", "--strict", appPath], {
+    encoding: "utf8",
+  });
+  if (result.error) throw result.error;
+  return result;
+}
+
 module.exports = async (context) => {
   const appPath = path.join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`);
   if (!fs.existsSync(appPath)) {
@@ -23,7 +31,13 @@ module.exports = async (context) => {
   }
 
   let details = signatureDetails(appPath);
-  if (!details.includes("Signature=") && !details.includes("Authority=")) {
+  const verification = verifySignature(appPath);
+  if (verification.status !== 0) {
+    if (details.includes("Authority=")) {
+      throw new Error(
+        `The signed app failed codesign verification: ${verification.stderr || verification.stdout}`,
+      );
+    }
     run("codesign", [
       "--force",
       "--deep",
@@ -36,6 +50,12 @@ module.exports = async (context) => {
       appPath,
     ]);
     details = signatureDetails(appPath);
+    const adhocVerification = verifySignature(appPath);
+    if (adhocVerification.status !== 0) {
+      throw new Error(
+        `The ad-hoc signed app failed codesign verification: ${adhocVerification.stderr || adhocVerification.stdout}`,
+      );
+    }
   }
 
   const notarizationCredentials = [

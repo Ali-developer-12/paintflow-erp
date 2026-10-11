@@ -160,7 +160,7 @@ async function start() {
   const appUrl = `http://127.0.0.1:${apiPort}`;
 
   apiProcess = spawn(systemNode, [path.join(serverDirectory, "src", "run.js")], {
-    cwd: serverDirectory,
+    cwd: packaged ? dataDirectory : serverDirectory,
     env: {
       ...process.env,
       HOST: "127.0.0.1",
