@@ -20,9 +20,20 @@ verify_app() {
   local executable="$app_path/Contents/MacOS/GSN Paints"
   local sqlite="$app_path/Contents/Resources/app.asar.unpacked/server/electron-runtime/node_modules/better-sqlite3/build/Release/better_sqlite3.node"
 
-  test -d "$app_path"
-  test -x "$executable"
-  test -f "$sqlite"
+  if [ ! -d "$app_path" ]; then
+    echo "Missing app bundle: $app_path" >&2
+    exit 1
+  fi
+  if [ ! -x "$executable" ]; then
+    echo "Missing executable: $executable" >&2
+    find "$app_path/Contents/MacOS" -maxdepth 1 -type f -print >&2
+    exit 1
+  fi
+  if [ ! -f "$sqlite" ]; then
+    echo "Missing unpacked better-sqlite3 native module: $sqlite" >&2
+    find "$app_path/Contents/Resources" -path '*better-sqlite3*' -print >&2
+    exit 1
+  fi
   file "$executable" "$sqlite"
   lipo -verify_arch "$EXPECTED_ARCH" "$executable"
   lipo -verify_arch "$EXPECTED_ARCH" "$sqlite"

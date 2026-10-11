@@ -30,6 +30,8 @@ files:
   - "!server/node_modules/better-sqlite3/**"
   - "!server/node_modules/.bin/**"
 
+includeSubNodeModules: true
+
 asarUnpack:
   - server/electron-runtime/node_modules/better-sqlite3/build/Release/*.node
 
