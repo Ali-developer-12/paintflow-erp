@@ -73,17 +73,35 @@ jobs:
 
       - name: Package DMG and ZIP for this Mac
         env:
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          GSN_CSC_LINK: ${{ secrets.CSC_LINK }}
+          GSN_CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          GSN_APPLE_ID: ${{ secrets.APPLE_ID }}
+          GSN_APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          GSN_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -euo pipefail
           mkdir -p build-logs
+          if [[ -n "${GSN_CSC_LINK:-}" ]]; then
+            export CSC_LINK="$GSN_CSC_LINK"
+            if [[ -n "${GSN_CSC_KEY_PASSWORD:-}" ]]; then
+              export CSC_KEY_PASSWORD="$GSN_CSC_KEY_PASSWORD"
+            fi
+            if [[ -n "${GSN_APPLE_ID:-}" ]]; then
+              export APPLE_ID="$GSN_APPLE_ID"
+            fi
+            if [[ -n "${GSN_APPLE_APP_SPECIFIC_PASSWORD:-}" ]]; then
+              export APPLE_APP_SPECIFIC_PASSWORD="$GSN_APPLE_APP_SPECIFIC_PASSWORD"
+            fi
+            if [[ -n "${GSN_APPLE_TEAM_ID:-}" ]]; then
+              export APPLE_TEAM_ID="$GSN_APPLE_TEAM_ID"
+            fi
+          fi
           npx electron-builder --mac dmg zip --${MAC_ARCH} --publish never 2>&1 | tee build-logs/electron-builder.log
-          APP_PATH="$(find release -type d -name 'GSN Paints.app' -print -quit)"
-          test -n "$APP_PATH"
+          APP_PATH="release/mac${MAC_ARCH/arm64/-arm64}/GSN Paints.app"
+          if [[ "$MAC_ARCH" == "x64" ]]; then
+            APP_PATH="release/mac/GSN Paints.app"
+          fi
+          test -d "$APP_PATH"
           echo "APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
 
       - name: Verify app, native architecture, signatures, DMG, and ZIP
@@ -91,8 +109,13 @@ jobs:
           set -euo pipefail
           mkdir -p build-logs
           VERSION="$(node -p "require('./package.json').version")"
+          APP_PATH="release/mac${MAC_ARCH/arm64/-arm64}/GSN Paints.app"
+          if [[ "$MAC_ARCH" == "x64" ]]; then
+            APP_PATH="release/mac/GSN Paints.app"
+          fi
           DMG_PATH="release/GSN-Paints-${VERSION}-mac-${MAC_ARCH}.dmg"
           ZIP_PATH="release/GSN-Paints-${VERSION}-mac-${MAC_ARCH}.zip"
+          test -d "$APP_PATH"
           test -f "$DMG_PATH"
           test -f "$ZIP_PATH"
           bash scripts/verify-macos-package.sh "$MAC_ARCH" "$APP_PATH" "$DMG_PATH" "$ZIP_PATH" 2>&1 | tee build-logs/package-verification.log
