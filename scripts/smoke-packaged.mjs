@@ -312,15 +312,14 @@ async function setupOrLogin(connection, expectedStage = null) {
 }
 
 async function getCustomerNames(connection, origin) {
-  return connection.evaluate(async (apiOrigin) => {
-    const token = localStorage.getItem("paint-erp.token");
-    const response = await fetch(`${apiOrigin}/api/setup/customers`, {
-      headers: { Authorization: "Bearer " + token },
-    });
-    if (!response.ok) throw new Error(`Customer list failed (${response.status})`);
-    const customers = await response.json();
-    return customers.map((customer) => customer.name);
-  }, origin);
+  const token = await connection.evaluate(() => localStorage.getItem("paint-erp.token"));
+  assert.ok(token, "the authenticated session token must be available");
+  const response = await fetch(`${origin}/api/setup/customers`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  assert.equal(response.status, 200, "the customer list must load successfully");
+  const customers = await response.json();
+  return customers.map((customer) => customer.name);
 }
 
 async function addCustomer(connection, origin, name) {
