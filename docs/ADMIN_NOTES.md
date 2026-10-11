@@ -32,6 +32,16 @@ For a production run from a source checkout, install the root and `server` depen
 
 Use the admin-only **Backup** module to create and restore backups. In Electron, **Create Backup** opens the native Save dialog; in supported browsers, it saves into a chosen folder. Both flows can replace an existing, validated GSN Paints backup after explicit confirmation. **Restore Backup** displays the file summary before requiring the exact word `RESTORE`; the server keeps a safety copy under `DATA_DIR\pre-restore` and retains the five most recent copies. A restore replaces the live database, restarts the server, invalidates every session, and requires sign-in with the users and passwords in the restored backup. Keep additional copies outside the workstation. Browsers without File System Access support offer download and upload fallback actions; they do not offer replacement.
 
+## Shared code across Windows, Windows 7, and macOS installers
+
+The same application code is reused across each OS packaging path:
+
+- `electron/` contains the Electron wrapper and the OS-specific guard logic.
+- `server/` contains the backend API, auth, backup/restore, and SQLite schema.
+- `dist/` holds the built SPA that the desktop app serves locally.
+
+Only the packaging script and the app bundle metadata differ by OS. The core ERP logic remains unchanged across Windows 10/11, Windows 7, and macOS builds.
+
 ## If the application will not start
 
 1. Check the terminal output for the reported startup error. If the port is occupied, stop the other local service or configure an available `PORT`.

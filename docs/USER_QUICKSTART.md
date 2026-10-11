@@ -29,6 +29,16 @@ Each **Counter Sale** and customer **Return** line has an editable **Cost** fiel
 - After a restore, sign in with the usernames and passwords stored in the selected backup. A password changed after that backup was created will not work until you change it again in the restored database. The current database is kept in `DATA_DIR\pre-restore` (the five most recent safety copies are retained).
 - Keep another copy of important backups on storage protected from workstation failure. Do not edit database or backup files while the application is running. Browsers without File System Access support download new backups normally and use a file picker for restore; replacing an existing backup is not offered there.
 
+## Shared code across Windows 10 / Windows 7 / macOS installers
+
+The same application source is used for all desktop builds:
+
+- `electron/` contains the wrapper and OS-specific login/backup behavior
+- `server/` contains the database, backup logic, and ERP API
+- `dist/` contains the built browser frontend used by the app
+
+The packaging script changes by OS, but the core GSN Paints ERP code is the same everywhere.
+
 ## Frequently asked questions
 
 **I do not see the setup screen.** An administrator account already exists in this database. Ask the administrator to create or enable your account.

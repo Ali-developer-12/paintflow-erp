@@ -101,8 +101,19 @@ npm test
 npm run build
 ```
 
+## Shared code across Windows and macOS installers
+
+The same project code is shared by every installer:
+
+- `electron/` holds the desktop wrapper and OS-specific guards
+- `server/` holds the Express + SQLite service, auth, backup/restore logic, and schema
+- `dist/` is the built SPA output used by the desktop app
+
+Per platform, only the packaging script and OS-specific hooks differ. The Windows 10/11 desktop workflow, the macOS ZIP workflow, and the future Windows 7 packaging path all consume the same server and app code; the target OS only changes the build wrapper and the app bundle metadata.
+
 ## Notes
 
 - This project is designed for local, offline operation.
 - Do not check in real business data.
 - Keep generated artifacts and database files out of version control.
+- A real macOS app launch and installer test must still be run on a Mac or macOS CI runner; this repo prepares the bundle and verification scripts but does not claim a real Mac validation result.

@@ -19,6 +19,8 @@ This project is prepared for a macOS build but this Windows machine cannot produ
 5. Run `./scripts/build-mac.sh`.
 6. Review the produced files in `release/`.
 
+The script builds for the Mac's native architecture by default. To build the other supported architecture, run `MAC_ARCH=arm64 ./scripts/build-mac.sh` or `MAC_ARCH=x64 ./scripts/build-mac.sh` as appropriate. The GitHub Actions workflow produces separate arm64 and x64 DMGs.
+
 ## Option C: Ask a friend with a Mac
 
 1. Send the repo or a ZIP of the current working tree.
@@ -35,13 +37,13 @@ Use the matching DMG for the target machine (arm64 for Apple Silicon, x64 for In
 
 ## Gatekeeper
 
-An ad-hoc signed app will often be blocked by Gatekeeper on first launch. The user can open it with:
+The current packaging config does not sign or notarize the app. macOS may block or warn on first launch. The user can open it with:
 
 - right-click the app and choose Open, or
 - System Settings > Privacy & Security > Open Anyway, or
 - `xattr -dr com.apple.quarantine "/Applications/GSN Paints.app"`
 
-Notarization requires a paid Apple Developer account and is the only way to remove the Gatekeeper warning completely.
+A Developer ID Application certificate and Apple notarization are required for a trusted, warning-free installation.
 
 ## Current status
 
